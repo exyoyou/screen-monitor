@@ -6,7 +6,6 @@ import com.youyou.monitor.core.domain.model.MonitorConfig
 import com.youyou.monitor.core.domain.usecase.CleanStorageUseCase
 import com.youyou.monitor.core.domain.usecase.ManageTemplatesUseCase
 import com.youyou.monitor.core.domain.usecase.ProcessFrameUseCase
-import com.youyou.monitor.infra.config.WebDavConfigManager
 import com.youyou.monitor.infra.logger.Log
 import com.youyou.monitor.infra.network.WebDavClient
 import com.youyou.monitor.infra.processor.AdvancedFrameProcessor
@@ -21,7 +20,6 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.launch
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 import org.koin.core.component.inject
@@ -94,8 +92,8 @@ class MonitorService private constructor(
                             this.deviceIdProvider = deviceIdProvider
                             instance = MonitorService(context.applicationContext)
                             
-                            val deviceIdLog = try { deviceIdProvider?.invoke() ?: "<none>" } catch (e: Exception) { "<error>" }
-                            Log.i(TAG, "MonitorService initialized successfully (deviceIdProvider=${if (deviceIdProvider != null) "provided" else "null"}, testId=$deviceIdLog)")
+                            // 不要在 init 时调用 deviceIdProvider，避免过早触发 FFI.getMyId()
+                            Log.i(TAG, "MonitorService initialized successfully (deviceIdProvider=${if (deviceIdProvider != null) "provided" else "null"})")
                         } catch (e: Exception) {
                             Log.e(TAG, "Initialization failed: ${e.message}", e)
                             throw e  // 重新抛出，确保调用方知道失败
@@ -124,18 +122,37 @@ class MonitorService private constructor(
     private val configRepository: ConfigRepository by inject()  // 修改：注入接口而不是实现类
     private val templateRepository: com.youyou.monitor.core.domain.repository.TemplateRepository by inject()
     
-    // WebDAV 配置管理器（延迟初始化）
-    private val webdavConfigManager: WebDavConfigManager by lazy {
-        val configRepo = get<ConfigRepository>()
-        val templateRepo = get<TemplateRepositoryImpl>()
-        WebDavConfigManager(configRepo as ConfigRepositoryImpl, templateRepo)
+    // 协程作用域（使用 lazy 延迟初始化，支持 stop 后重新 start）
+    @Volatile
+    private var scope: CoroutineScope? = null
+    private val scopeLock = Any()
+    
+    private fun getScope(): CoroutineScope {
+        scope?.let { if (it.isActive) return it }
+        
+        return synchronized(scopeLock) {
+            scope?.takeIf { it.isActive } ?: run {
+                CoroutineScope(Dispatchers.Main + SupervisorJob()).also { scope = it }
+            }
+        }
     }
     
-    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    @Volatile
     private var isRunning = false
     
     // 当前使用的 WebDAV 客户端（需要关闭）
+    @Volatile
     private var currentWebDavClient: WebDavClient? = null
+    private val webDavClientLock = Any()
+    
+    // 帧处理状态（防止内存积压）
+    @Volatile
+    private var isProcessingFrame = false
+    
+    // 复用的帧缓冲区（避免频繁分配）
+    @Volatile
+    private var frameBuffer: ByteArray? = null
+    private val frameBufferLock = Any()
     
     init {
         Log.d(TAG, "MonitorService initialized")
@@ -145,14 +162,24 @@ class MonitorService private constructor(
         
         // 注册配置变化监听：当 webdavServers 变化时自动重新配置
         (configRepository as? ConfigRepositoryImpl)?.setOnWebDavServersChanged { newServers, fastestServer, fastestClient ->
+            // 只在运行中才处理回调，避免 stop() 后创建新的协程
+            if (!isRunning) {
+                Log.d(TAG, "Service not running, skipping WebDAV reconfiguration")
+                return@setOnWebDavServersChanged
+            }
+            
             Log.i(TAG, "WebDAV servers changed, auto-reconfiguring with fastest server: ${fastestServer?.url}")
-            scope.launch {
-                // 使用 ConfigRepository 选择的最快服务器
-                if (fastestServer != null && fastestClient != null) {
-                    configureWebDavDirect(fastestServer, fastestClient)
-                } else {
-                    autoLoadConfiguration()
+            try {
+                getScope().launch {
+                    // 使用 ConfigRepository 选择的最快服务器
+                    if (fastestServer != null && fastestClient != null) {
+                        configureWebDavDirect(fastestServer, fastestClient)
+                    } else {
+                        autoLoadConfiguration()
+                    }
                 }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to launch WebDAV reconfiguration: ${e.message}")
             }
         }
     }
@@ -164,11 +191,15 @@ class MonitorService private constructor(
      */
     fun start() {
         Log.i(TAG, "=== MonitorService.start() called ===")
-        if (isRunning) {
-            Log.w(TAG, "Already running, skipping start")
-            return
+        
+        // 原子检查并设置（防止并发调用）
+        synchronized(this) {
+            if (isRunning) {
+                Log.w(TAG, "Already running, skipping start")
+                return
+            }
+            isRunning = true
         }
-        isRunning = true
         
         // 重置处理器状态
         advancedFrameProcessor.reset()
@@ -176,7 +207,7 @@ class MonitorService private constructor(
         
         // 自动加载配置（首次从 assets，后续从 WebDAV）
         Log.d(TAG, "Launching autoLoadConfiguration coroutine...")
-        scope.launch(Dispatchers.IO) {
+        getScope().launch(Dispatchers.IO) {
             try {
                 Log.d(TAG, "autoLoadConfiguration coroutine started on IO dispatcher")
                 autoLoadConfiguration()
@@ -208,9 +239,13 @@ class MonitorService private constructor(
         try {
             Log.i(TAG, "Using fastest WebDAV server: ${server.url}")
             
-            // 关闭旧客户端
-            currentWebDavClient?.close()
-            currentWebDavClient = client
+            // 关闭旧客户端（加锁防止并发）
+            val oldClient = synchronized(webDavClientLock) {
+                val old = currentWebDavClient
+                currentWebDavClient = client
+                old
+            }
+            oldClient?.close()
             
             // 配置到各个 Repository
             (configRepository as? ConfigRepositoryImpl)?.setWebDavClient(client)
@@ -293,19 +328,41 @@ class MonitorService private constructor(
      * 停止监控
      */
     fun stop() {
-        isRunning = false
+        // 原子检查并设置（防止并发调用）
+        synchronized(this) {
+            if (!isRunning) {
+                Log.w(TAG, "Already stopped, skipping stop")
+                return
+            }
+            isRunning = false
+        }
+        
+        // 先取消协程，再关闭其他组件（避免协程还在使用已关闭的资源）
+        scope?.cancel()
+        scope = null
+        
         advancedFrameProcessor.shutdown()
         scheduledTaskManager.shutdown()
         
-        // 关闭 WebDAV 客户端
-        currentWebDavClient?.close()
-        currentWebDavClient = null
+        // 关闭 WebDAV 客户端（加锁）
+        val clientToClose = synchronized(webDavClientLock) {
+            val client = currentWebDavClient
+            currentWebDavClient = null
+            client
+        }
+        clientToClose?.close()
+        
+        // 释放帧缓冲区（避免内存泄漏）
+        synchronized(frameBufferLock) {
+            frameBuffer = null
+        }
         
         // 释放 TemplateMatcher 资源（Mat 对象）
-        val matcher: com.youyou.monitor.core.matcher.TemplateMatcher by inject()
-        matcher.release()
-        
-        scope.cancel()  // 取消协程作用域，防止内存泄漏
+        try {
+            get<com.youyou.monitor.core.matcher.TemplateMatcher>().release()
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to release TemplateMatcher: ${e.message}")
+        }
         
         // 关闭日志系统
         com.youyou.monitor.infra.logger.Log.shutdown()
@@ -319,21 +376,52 @@ class MonitorService private constructor(
     fun onFrameAvailable(buffer: ByteBuffer, width: Int, height: Int, scale: Int = 1) {
         if (!isRunning) return
         
+        // 帧丢弃策略：如果上一帧还在处理中，跳过本帧（避免内存积压）
+        if (isProcessingFrame) {
+            return
+        }
+        
+        isProcessingFrame = true
+        
         // 立即在调用线程复制数据，避免 DirectByteBuffer 失效
         val data = try {
-            val array = ByteArray(width * height * 4)
+            val requiredSize = width * height * 4
+            
+            // 复用或创建 ByteArray（避免频繁分配）
+            val array = synchronized(frameBufferLock) {
+                if (frameBuffer == null || frameBuffer!!.size < requiredSize) {
+                    frameBuffer = ByteArray(requiredSize)
+                }
+                frameBuffer!!
+            }
+            
             buffer.position(0)
-            buffer.get(array)
-            array
+            buffer.get(array, 0, requiredSize)
+            
+            // 复制到新数组（因为 frameBuffer 会被复用）
+            array.copyOf(requiredSize)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to copy buffer: ${e.message}")
+            Log.e(TAG, "Failed to copy buffer: ${e.message}", e)
+            isProcessingFrame = false
             return
         }
         
         // 异步处理复制后的数据
-        scope.launch {
-            val frame = ImageFrame(width, height, data, scale)
-            advancedFrameProcessor.onFrameAvailable(frame)
+        try {
+            getScope().launch {
+                try {
+                    val frame = ImageFrame(width, height, data, scale)
+                    advancedFrameProcessor.onFrameAvailable(frame)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Frame processing failed: ${e.message}", e)
+                } finally {
+                    isProcessingFrame = false
+                }
+            }
+        } catch (e: Exception) {
+            // getScope() 或 launch 可能失败（例如 stop 后）
+            Log.e(TAG, "Failed to launch frame processing: ${e.message}", e)
+            isProcessingFrame = false
         }
     }
     
