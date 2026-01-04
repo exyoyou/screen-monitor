@@ -15,6 +15,7 @@ import com.youyou.monitor.infra.repository.TemplateRepositoryImpl
 import com.youyou.monitor.infra.task.ScheduledTaskManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
@@ -125,14 +126,34 @@ class MonitorService private constructor(
     // 协程作用域（使用 lazy 延迟初始化，支持 stop 后重新 start）
     @Volatile
     private var scope: CoroutineScope? = null
+    
+    // 缓存的 Job 引用（避免重复 Map 查找）
+    @Volatile
+    private var scopeJob: Job? = null
+    
     private val scopeLock = Any()
     
     private fun getScope(): CoroutineScope {
-        scope?.let { if (it.isActive) return it }
+        // 快速路径：如果 scope 和 job 都存在且活跃，直接返回
+        val currentScope = scope
+        val currentJob = scopeJob
+        if (currentScope != null && currentJob != null && currentJob.isActive) {
+            return currentScope
+        }
         
+        // 慢速路径：需要创建或重建 scope
         return synchronized(scopeLock) {
-            scope?.takeIf { it.isActive } ?: run {
-                CoroutineScope(Dispatchers.Main + SupervisorJob()).also { scope = it }
+            val existingScope = scope
+            val existingJob = scopeJob
+            
+            if (existingScope != null && existingJob != null && existingJob.isActive) {
+                existingScope
+            } else {
+                val newJob = SupervisorJob()
+                val newScope = CoroutineScope(Dispatchers.Main + newJob)
+                scope = newScope
+                scopeJob = newJob
+                newScope
             }
         }
     }
@@ -340,6 +361,7 @@ class MonitorService private constructor(
         // 先取消协程，再关闭其他组件（避免协程还在使用已关闭的资源）
         scope?.cancel()
         scope = null
+        scopeJob = null
         
         advancedFrameProcessor.shutdown()
         scheduledTaskManager.shutdown()
