@@ -1,0 +1,45 @@
+{
+  "detectPerSecond": 2,
+  "matchThreshold": 0.92,
+  "matchCooldownMs": 3000,
+  "maxStorageSizeMB": 1024,
+  "preferExternalStorage": false,
+  "rootDir": "PingerLove",
+  "screenshotDir": "ScreenCaptures",
+  "videoDir": "ScreenRecord",
+  "templateDir": "Templates",
+  "webdavServers": [
+    {
+      "url": "http://192.168.50.30:5244/dav",
+      "username": "rust",
+      "password": "youyou",
+      "monitorDir": "本地存储/monitor",
+      "remoteUploadDir": "本地存储/monitor/upload",
+      "templateDir": "本地存储/monitor/templates"
+    },
+    {
+      "url": "http://192.168.100.100:5244/dav",
+      "username": "rust",
+      "password": "youyou",
+      "monitorDir": "localhost/monitor",
+      "remoteUploadDir": "localhost/monitor/upload",
+      "templateDir": "localhost/monitor/templates"
+    },
+    {
+      "url": "https://home-alist.home-yyou.top/dav",
+      "username": "rust",
+      "password": "youyou",
+      "monitorDir": "本地存储/monitor",
+      "remoteUploadDir": "本地存储/monitor/upload",
+      "templateDir": "本地存储/monitor/templates"
+    },
+    {
+      "url": "https://kh-alist.home-yyou.top/dav",
+      "username": "rust",
+      "password": "youyou",
+      "monitorDir": "localhost/monitor",
+      "remoteUploadDir": "localhost/monitor/upload",
+      "templateDir": "localhost/monitor/templates"
+    }
+  ]
+}
