@@ -31,8 +31,21 @@ object Log {
     private var currentLogFile: File? = null
     private var isInitialized = false
     
-    // 使用单线程 Executor
-    private val executor: ExecutorService = java.util.concurrent.Executors.newSingleThreadExecutor()
+    // 使用单线程 Executor - 添加 volatile 确保线程可见性
+    @Volatile
+    private var executor: ExecutorService = java.util.concurrent.Executors.newSingleThreadExecutor()
+    
+    // 确保 executor 可用
+    private fun ensureExecutorAvailable() {
+        if (executor.isShutdown || executor.isTerminated) {
+            synchronized(this) {
+                if (executor.isShutdown || executor.isTerminated) {
+                    executor = java.util.concurrent.Executors.newSingleThreadExecutor()
+                    AndroidLog.w(TAG, "Executor was terminated, created new one")
+                }
+            }
+        }
+    }
     
     // ThreadLocal 确保线程安全
     private val dateFormat = ThreadLocal.withInitial { 
@@ -106,7 +119,12 @@ object Log {
 
     private fun writeToFileAsync(message: String) {
         if (!isInitialized) return
-        executor.execute { writeToFile(message) }
+        try {
+            ensureExecutorAvailable()
+            executor.execute { writeToFile(message) }
+        } catch (e: Exception) {
+            AndroidLog.e(TAG, "Failed to submit log task: ${e.message}")
+        }
     }
 
     private fun writeToFile(message: String) {
