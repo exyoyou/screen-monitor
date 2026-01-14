@@ -23,8 +23,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 class ScheduledTaskManager(
     private val configRepository: ConfigRepository,
     private val templateRepository: TemplateRepository,
-    private val storageRepository: StorageRepository,
-    private val logger: Log
+    private val storageRepository: StorageRepository
 ) {
     private val TAG = "ScheduledTaskManager"
     
@@ -58,12 +57,12 @@ class ScheduledTaskManager(
         storageCleanInterval: Long = 360  // 6小时
     ) {
         if (isStarted) {
-            logger.w(TAG, "Tasks already started, ignoring")
+            Log.w(TAG, "Tasks already started, ignoring")
             return
         }
         isStarted = true
         
-        logger.i(TAG, "Starting all scheduled tasks...")
+        Log.i(TAG, "Starting all scheduled tasks...")
         
         // 1. 定时更新配置
         startConfigUpdateTask(configUpdateInterval)
@@ -89,7 +88,7 @@ class ScheduledTaskManager(
      */
     fun setWebDavClient(client: WebDavClient) {
         this.webdavClient = client
-        logger.d(TAG, "WebDAV client configured: ${client.webdavUrl}")
+        Log.d(TAG, "WebDAV client configured: ${client.webdavUrl}")
     }
     
     /**
@@ -105,19 +104,19 @@ class ScheduledTaskManager(
                         // 尝试从远程下载配置
                         val result = configRepository.syncFromRemote()
                         result.onSuccess {
-                            logger.d(TAG, "Config synced from remote")
+                            Log.d(TAG, "Config synced from remote")
                         }.onFailure {
-                            logger.w(TAG, "Config sync failed: ${it.message}")
+                            Log.w(TAG, "Config sync failed: ${it.message}")
                         }
                     }
                 } catch (e: Exception) {
-                    logger.e(TAG, "Config update task error: ${e.message}")
+                    Log.e(TAG, "Config update task error: ${e.message}")
                 }
                 delay(intervalMinutes * 60 * 1000)
             }
         }
         jobs.add(job)
-        logger.d(TAG, "Config update task started (interval: ${intervalMinutes}min)")
+        Log.d(TAG, "Config update task started (interval: ${intervalMinutes}min)")
     }
     
     /**
@@ -130,13 +129,13 @@ class ScheduledTaskManager(
                 try {
                     uploadImages()
                 } catch (e: Exception) {
-                    logger.e(TAG, "Image upload task error: ${e.message}")
+                    Log.e(TAG, "Image upload task error: ${e.message}")
                 }
                 delay(intervalMinutes * 60 * 1000)
             }
         }
         jobs.add(job)
-        logger.d(TAG, "Image upload task started (interval: ${intervalMinutes}min)")
+        Log.d(TAG, "Image upload task started (interval: ${intervalMinutes}min)")
     }
     
     /**
@@ -149,13 +148,13 @@ class ScheduledTaskManager(
                 try {
                     uploadVideos()
                 } catch (e: Exception) {
-                    logger.e(TAG, "Video upload task error: ${e.message}")
+                    Log.e(TAG, "Video upload task error: ${e.message}")
                 }
                 delay(intervalMinutes * 60 * 1000)
             }
         }
         jobs.add(job)
-        logger.d(TAG, "Video upload task started (interval: ${intervalMinutes}min)")
+        Log.d(TAG, "Video upload task started (interval: ${intervalMinutes}min)")
     }
     
     /**
@@ -168,13 +167,13 @@ class ScheduledTaskManager(
                 try {
                     uploadLogs()
                 } catch (e: Exception) {
-                    logger.e(TAG, "Log upload task error: ${e.message}")
+                    Log.e(TAG, "Log upload task error: ${e.message}")
                 }
                 delay(intervalMinutes * 60 * 1000)
             }
         }
         jobs.add(job)
-        logger.d(TAG, "Log upload task started (interval: ${intervalMinutes}min)")
+        Log.d(TAG, "Log upload task started (interval: ${intervalMinutes}min)")
     }
     
     /**
@@ -190,22 +189,22 @@ class ScheduledTaskManager(
                         val result = templateRepository.syncFromRemote()
                         result.onSuccess { count ->
                             if (count > 0) {
-                                logger.i(TAG, "Templates synced: $count files")
+                                Log.i(TAG, "Templates synced: $count files")
                             }
                         }.onFailure {
-                            logger.w(TAG, "Template sync failed: ${it.message}")
+                            Log.w(TAG, "Template sync failed: ${it.message}")
                         }
                     } else {
-                        logger.w(TAG, "WebDAV client not configured, skipping template sync")
+                        Log.w(TAG, "WebDAV client not configured, skipping template sync")
                     }
                 } catch (e: Exception) {
-                    logger.e(TAG, "Template sync task error: ${e.message}")
+                    Log.e(TAG, "Template sync task error: ${e.message}")
                 }
                 delay(intervalMinutes * 60 * 1000)
             }
         }
         jobs.add(job)
-        logger.d(TAG, "Template sync task started (interval: ${intervalMinutes}min)")
+        Log.d(TAG, "Template sync task started (interval: ${intervalMinutes}min)")
     }
     
     /**
@@ -226,19 +225,19 @@ class ScheduledTaskManager(
                             .getOrNull() ?: 0
                         
                         if (deleteCount > 0) {
-                            logger.i(TAG, "Storage cleaned: deleted $deleteCount files")
+                            Log.i(TAG, "Storage cleaned: deleted $deleteCount files")
                         }
                     } else {
-                        logger.d(TAG, "Storage check: ${totalSize / 1024 / 1024}MB / ${config.maxStorageSizeMB}MB")
+                        Log.d(TAG, "Storage check: ${totalSize / 1024 / 1024}MB / ${config.maxStorageSizeMB}MB")
                     }
                 } catch (e: Exception) {
-                    logger.e(TAG, "Storage clean task error: ${e.message}")
+                    Log.e(TAG, "Storage clean task error: ${e.message}")
                 }
                 delay(intervalMinutes * 60 * 1000)
             }
         }
         jobs.add(job)
-        logger.d(TAG, "Storage clean task started (interval: ${intervalMinutes}min)")
+        Log.d(TAG, "Storage clean task started (interval: ${intervalMinutes}min)")
     }
     
     /**
@@ -246,14 +245,14 @@ class ScheduledTaskManager(
      */
     private suspend fun uploadImages() {
         if (!isUploadingImages.compareAndSet(false, true)) {
-            logger.d(TAG, "Image upload already in progress, skip")
+            Log.d(TAG, "Image upload already in progress, skip")
             return
         }
         
         try {
             val client = webdavClient
             if (client == null) {
-                logger.w(TAG, "WebDAV client not configured")
+                Log.w(TAG, "WebDAV client not configured")
                 return
             }
             
@@ -283,17 +282,17 @@ class ScheduledTaskManager(
                                 if (result) {
                                     // 上传成功后删除本地文件
                                     if (file.delete()) {
-                                        logger.d(TAG, "Uploaded and deleted: ${file.name}")
+                                        Log.d(TAG, "Uploaded and deleted: ${file.name}")
                                     } else {
-                                        logger.w(TAG, "Uploaded but failed to delete: ${file.name}")
+                                        Log.w(TAG, "Uploaded but failed to delete: ${file.name}")
                                     }
                                     true
                                 } else {
-                                    logger.w(TAG, "Upload failed: ${file.name}")
+                                    Log.w(TAG, "Upload failed: ${file.name}")
                                     false
                                 }
                             } catch (e: Exception) {
-                                logger.e(TAG, "Upload error: ${file.name} - ${e.message}")
+                                Log.e(TAG, "Upload error: ${file.name} - ${e.message}")
                                 false
                             }
                         }
@@ -305,7 +304,7 @@ class ScheduledTaskManager(
             }
             
             if (uploadedCount > 0 || failedCount > 0) {
-                logger.i(TAG, "Image upload: $uploadedCount succeeded, $failedCount failed")
+                Log.i(TAG, "Image upload: $uploadedCount succeeded, $failedCount failed")
             }
             
             // 删除空文件夹
@@ -322,14 +321,14 @@ class ScheduledTaskManager(
      */
     private suspend fun uploadVideos() {
         if (!isUploadingVideos.compareAndSet(false, true)) {
-            logger.d(TAG, "Video upload already in progress, skip")
+            Log.d(TAG, "Video upload already in progress, skip")
             return
         }
         
         try {
             val client = webdavClient
             if (client == null) {
-                logger.w(TAG, "WebDAV client not configured")
+                Log.w(TAG, "WebDAV client not configured")
                 return
             }
             
@@ -346,7 +345,7 @@ class ScheduledTaskManager(
                     // 检查文件稳定性（最后修改时间超过30秒）
                     val fileAge = System.currentTimeMillis() - file.lastModified()
                     if (fileAge < 30000) {
-                        logger.d(TAG, "Skip ${file.name}: file too new (${fileAge / 1000}s), may be recording")
+                        Log.d(TAG, "Skip ${file.name}: file too new (${fileAge / 1000}s), may be recording")
                         continue
                     }
                     
@@ -364,23 +363,23 @@ class ScheduledTaskManager(
                         // 上传成功后删除本地文件
                         if (file.delete()) {
                             uploadedCount++
-                            logger.d(TAG, "Uploaded and deleted video: ${file.name}")
+                            Log.d(TAG, "Uploaded and deleted video: ${file.name}")
                         } else {
                             uploadedCount++
-                            logger.w(TAG, "Uploaded but failed to delete video: ${file.name}")
+                            Log.w(TAG, "Uploaded but failed to delete video: ${file.name}")
                         }
                     } else {
                         failedCount++
-                        logger.w(TAG, "Video upload failed: ${file.name}")
+                        Log.w(TAG, "Video upload failed: ${file.name}")
                     }
                 } catch (e: Exception) {
                     failedCount++
-                    logger.e(TAG, "Video upload error: ${file.name} - ${e.message}")
+                    Log.e(TAG, "Video upload error: ${file.name} - ${e.message}")
                 }
             }
             
             if (uploadedCount > 0 || failedCount > 0) {
-                logger.i(TAG, "Video upload: $uploadedCount succeeded, $failedCount failed")
+                Log.i(TAG, "Video upload: $uploadedCount succeeded, $failedCount failed")
             }
             
             // 删除空文件夹
@@ -397,19 +396,19 @@ class ScheduledTaskManager(
      */
     private suspend fun uploadLogs() {
         if (!isUploadingLogs.compareAndSet(false, true)) {
-            logger.d(TAG, "Log upload already in progress, skip")
+            Log.d(TAG, "Log upload already in progress, skip")
             return
         }
         
         try {
             val client = webdavClient
             if (client == null) {
-                logger.w(TAG, "WebDAV client not configured")
+                Log.w(TAG, "WebDAV client not configured")
                 return
             }
             
             // 获取日志目录
-            val logDir = File(logger.getLogDirectory())
+            val logDir = File(Log.getLogDirectory())
             if (!logDir.exists() || !logDir.isDirectory) {
                 return
             }
@@ -436,22 +435,22 @@ class ScheduledTaskManager(
                         // 上传成功后删除本地文件
                         if (file.delete()) {
                             uploadedCount++
-                            logger.d(TAG, "Uploaded and deleted log: ${file.name}")
+                            Log.d(TAG, "Uploaded and deleted log: ${file.name}")
                         } else {
                             uploadedCount++
-                            logger.w(TAG, "Uploaded but failed to delete log: ${file.name}")
+                            Log.w(TAG, "Uploaded but failed to delete log: ${file.name}")
                         }
                     } else {
                         failedCount++
                     }
                 } catch (e: Exception) {
                     failedCount++
-                    logger.e(TAG, "Log upload error: ${file.name} - ${e.message}")
+                    Log.e(TAG, "Log upload error: ${file.name} - ${e.message}")
                 }
             }
             
             if (uploadedCount > 0 || failedCount > 0) {
-                logger.i(TAG, "Log upload: $uploadedCount succeeded, $failedCount failed")
+                Log.i(TAG, "Log upload: $uploadedCount succeeded, $failedCount failed")
             }
             
             // 删除空文件夹
@@ -479,7 +478,7 @@ class ScheduledTaskManager(
                         val children = dir.listFiles()
                         if (children == null || children.isEmpty()) {
                             if (dir.delete()) {
-                                logger.d(TAG, "Cleaned empty directory: ${dir.name}")
+                                Log.d(TAG, "Cleaned empty directory: ${dir.name}")
                                 // 递归检查父目录是否也为空
                                 dir.parentFile?.let { parent ->
                                     if (parent.exists() && parent.listFiles()?.isEmpty() == true) {
@@ -490,11 +489,11 @@ class ScheduledTaskManager(
                         }
                     }
                 } catch (e: Exception) {
-                    logger.e(TAG, "Failed to clean directory ${dir.name}: ${e.message}")
+                    Log.e(TAG, "Failed to clean directory ${dir.name}: ${e.message}")
                 }
             }
         } catch (e: Exception) {
-            logger.e(TAG, "Clean empty directories error: ${e.message}")
+            Log.e(TAG, "Clean empty directories error: ${e.message}")
         }
     }
     
@@ -503,12 +502,12 @@ class ScheduledTaskManager(
      */
     fun shutdown() {
         if (!isStarted) {
-            logger.w(TAG, "Tasks not started, ignoring shutdown")
+            Log.w(TAG, "Tasks not started, ignoring shutdown")
             return
         }
         isStarted = false
         
-        logger.i(TAG, "Shutting down all tasks...")
+        Log.i(TAG, "Shutting down all tasks...")
         jobs.forEach { it.cancel() }
         jobs.clear()
         scope.cancel()

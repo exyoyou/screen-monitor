@@ -35,8 +35,7 @@ import kotlin.concurrent.write
  */
 class GrayscaleMultiScaleMatcher(
     private val context: Context,
-    private val configRepository: ConfigRepository,
-    private val logger: Log
+    private val configRepository: ConfigRepository
 ) : TemplateMatcher {
     
     private val TAG = "GrayscaleMultiScaleMatcher"
@@ -79,10 +78,10 @@ class GrayscaleMultiScaleMatcher(
             if (!exists()) mkdirs()
         }
         
-        logger.d(TAG, "Loading templates from: ${templateDir.absolutePath}")
+        Log.d(TAG, "Loading templates from: ${templateDir.absolutePath}")
         
         if (!templateDir.exists() || !templateDir.isDirectory) {
-            logger.e(TAG, "Template directory not found: ${templateDir.absolutePath}")
+            Log.e(TAG, "Template directory not found: ${templateDir.absolutePath}")
             return Pair(0, emptyList())
         }
         
@@ -101,10 +100,10 @@ class GrayscaleMultiScaleMatcher(
                     bitmaps.add(bmp)
                     names.add(file.name)
                 } else {
-                    logger.w(TAG, "Failed to decode bitmap: ${file.name}")
+                    Log.w(TAG, "Failed to decode bitmap: ${file.name}")
                 }
             } catch (e: Exception) {
-                logger.e(TAG, "Error loading template ${file.name}: ${e.message}")
+                Log.e(TAG, "Error loading template ${file.name}: ${e.message}")
             }
         }
         
@@ -127,7 +126,7 @@ class GrayscaleMultiScaleMatcher(
         // 回收所有 Bitmap，防止内存泄漏
         bitmaps.forEach { it.recycle() }
         
-        logger.d(TAG, "Loaded ${newTemplateGrays.size} templates: $names")
+        Log.d(TAG, "Loaded ${newTemplateGrays.size} templates: $names")
         
         return Pair(newTemplateGrays.size, names)
     }
@@ -139,7 +138,7 @@ class GrayscaleMultiScaleMatcher(
         }
         
         if (templates.isEmpty()) {
-            logger.w(TAG, "No templates loaded")
+            Log.w(TAG, "No templates loaded")
             return null
         }
         
@@ -175,7 +174,7 @@ class GrayscaleMultiScaleMatcher(
             // 提前退出优化：如果粗搜索分数很低，跳过细搜索
             if (bestScore < threshold - EARLY_EXIT_OFFSET) {
                 if (scaleScores.size == coarseScales.size) {
-                    logger.d(TAG, "[$templateName] Skipped fine search (coarse best=${String.format("%.3f", bestScore)} << threshold)")
+                    Log.d(TAG, "[$templateName] Skipped fine search (coarse best=${String.format("%.3f", bestScore)} << threshold)")
                 }
                 continue
             }
@@ -217,12 +216,12 @@ class GrayscaleMultiScaleMatcher(
                 val scoresStr = scaleScores.sortedByDescending { it.second }
                     .take(5)
                     .joinToString(", ") { "${String.format("%.2f", it.first)}=${String.format("%.3f", it.second)}" }
-                logger.d(TAG, "[$templateName] ${scaleScores.size} scales in ${templateElapsed}ms, best: [$scoresStr]")
+                Log.d(TAG, "[$templateName] ${scaleScores.size} scales in ${templateElapsed}ms, best: [$scoresStr]")
             }
             
             // 匹配判断
             if (bestScore >= threshold) {
-                logger.i(TAG, "✓ Matched: $templateName (score=$bestScore, scale=${String.format("%.2f", bestScale)}, threshold=$threshold)")
+                Log.i(TAG, "✓ Matched: $templateName (score=$bestScore, scale=${String.format("%.2f", bestScale)}, threshold=$threshold)")
                 return MatchResult(
                     templateName = templateName,
                     score = bestScore,
@@ -231,7 +230,7 @@ class GrayscaleMultiScaleMatcher(
                     isWeak = false
                 )
             } else if (bestScore >= weakThreshold) {
-                logger.i(TAG, "⚠ Weak match: $templateName (score=$bestScore, scale=${String.format("%.2f", bestScale)}, threshold=$threshold, diff=${String.format("%.3f", threshold - bestScore)})")
+                Log.i(TAG, "⚠ Weak match: $templateName (score=$bestScore, scale=${String.format("%.2f", bestScale)}, threshold=$threshold, diff=${String.format("%.3f", threshold - bestScore)})")
                 return MatchResult(
                     templateName = "weak_$templateName",
                     score = bestScore,
@@ -243,7 +242,7 @@ class GrayscaleMultiScaleMatcher(
         }
         
         // 无匹配
-        logger.d(TAG, "✗ No match (threshold=$threshold)")
+        Log.d(TAG, "✗ No match (threshold=$threshold)")
         return null
     }
     
@@ -264,14 +263,14 @@ class GrayscaleMultiScaleMatcher(
             try {
                 mat.release()
             } catch (e: Exception) {
-                logger.e(TAG, "Error releasing Mat: ${e.message}")
+                Log.e(TAG, "Error releasing Mat: ${e.message}")
             }
         }
         
         // 清理 ThreadLocal，防止内存泄漏
         fineScalesMidLocal.remove()
         
-        logger.d(TAG, "Released all templates")
+        Log.d(TAG, "Released all templates")
     }
     
     /**
@@ -308,7 +307,7 @@ class GrayscaleMultiScaleMatcher(
             val mm = Core.minMaxLoc(result)
             mm.maxVal
         } catch (e: Exception) {
-            logger.e(TAG, "matchAtScale error at scale=$scale: ${e.message}")
+            Log.e(TAG, "matchAtScale error at scale=$scale: ${e.message}")
             Double.NEGATIVE_INFINITY
         } finally {
             result?.release()
@@ -345,7 +344,7 @@ class GrayscaleMultiScaleMatcher(
             if (result === tmp) tmp = null else resized = null
             result
         } catch (e: Exception) {
-            logger.e(TAG, "Failed to convert bitmap to Mat: ${e.message}")
+            Log.e(TAG, "Failed to convert bitmap to Mat: ${e.message}")
             null
         } finally {
             // 确保异常时释放未使用的 Mat

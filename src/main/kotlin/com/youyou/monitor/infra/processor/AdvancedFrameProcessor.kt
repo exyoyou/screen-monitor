@@ -36,8 +36,7 @@ import java.util.concurrent.atomic.AtomicLong
 class AdvancedFrameProcessor(
     private val configRepository: ConfigRepository,
     private val storageRepository: StorageRepository,
-    private val templateMatcher: TemplateMatcher,
-    private val logger: Log
+    private val templateMatcher: TemplateMatcher
 ) {
     private val TAG = "AdvancedFrameProcessor"
     
@@ -54,10 +53,10 @@ class AdvancedFrameProcessor(
             try {
                 configRepository.getConfigFlow().collect { config ->
                     cachedConfig = config
-                    logger.d(TAG, "Config updated: detectPerSecond=${config.detectPerSecond}")
+                    Log.d(TAG, "Config updated: detectPerSecond=${config.detectPerSecond}")
                 }
             } catch (e: Exception) {
-                logger.e(TAG, "Error collecting config: ${e.message}", e)
+                Log.e(TAG, "Error collecting config: ${e.message}", e)
             }
         }
     }
@@ -94,7 +93,7 @@ class AdvancedFrameProcessor(
         // 1. 队列堆积检查（最优先）
         if (isProcessing.get()) {
             if (count % 50 == 0L) {
-                logger.d(TAG, "[Skip] Previous frame still processing")
+                Log.d(TAG, "[Skip] Previous frame still processing")
             }
             return@withContext false
         }
@@ -103,7 +102,7 @@ class AdvancedFrameProcessor(
         
         // 2. 定期统计日志
         if (now - lastLogTime.get() > LOG_INTERVAL) {
-            logger.i(TAG, "[Stats] Total calls: $count, running: $running, isProcessing: ${isProcessing.get()}")
+            Log.i(TAG, "[Stats] Total calls: $count, running: $running, isProcessing: ${isProcessing.get()}")
             lastLogTime.set(now)
         }
         
@@ -112,13 +111,13 @@ class AdvancedFrameProcessor(
         val interval = if (config.detectPerSecond > 0) 1000 / config.detectPerSecond else 500
         if (now - lastDetectTime.get() < interval) {
             if (count % 100 == 0L) {
-                logger.d(TAG, "[Skip] Rate limit: ${now - lastDetectTime.get()}ms < ${interval}ms")
+                Log.d(TAG, "[Skip] Rate limit: ${now - lastDetectTime.get()}ms < ${interval}ms")
             }
             return@withContext false
         }
         
         if (!running) {
-            logger.w(TAG, "[Skip] Processor not running")
+            Log.w(TAG, "[Skip] Processor not running")
             return@withContext false
         }
         
@@ -127,19 +126,19 @@ class AdvancedFrameProcessor(
         // 4. 快速帧签名计算（采样9个点）
         val signature = calculateFrameSignature(frame)
         if (signature == null) {
-            logger.e(TAG, "[Skip] Signature calculation failed")
+            Log.e(TAG, "[Skip] Signature calculation failed")
             return@withContext false
         }
         
         // 5. 帧去重
         if (signature == lastFrameSignature.get()) {
             if (count % 50 == 0L) {
-                logger.d(TAG, "[Skip] Duplicate frame (signature: $signature)")
+                Log.d(TAG, "[Skip] Duplicate frame (signature: $signature)")
             }
             return@withContext false
         }
         
-        logger.d(TAG, "[Process] Frame accepted: ${frame.width}x${frame.height}, signature=$signature")
+        Log.d(TAG, "[Process] Frame accepted: ${frame.width}x${frame.height}, signature=$signature")
         
         // 6. 更新签名并异步处理
         lastFrameSignature.set(signature)
@@ -187,7 +186,7 @@ class AdvancedFrameProcessor(
             }
             sig
         } catch (e: Exception) {
-            logger.e(TAG, "Signature calculation error: ${e.message}")
+            Log.e(TAG, "Signature calculation error: ${e.message}")
             null
         }
     }
@@ -233,7 +232,7 @@ class AdvancedFrameProcessor(
                     (mat.rows() * resizeScale).toDouble()
                 )
                 Imgproc.resize(mat, resized, newSize, 0.0, 0.0, Imgproc.INTER_AREA)
-                logger.d(TAG, "Resized: ${frame.width}x${frame.height} -> ${resized.cols()}x${resized.rows()}")
+                Log.d(TAG, "Resized: ${frame.width}x${frame.height} -> ${resized.cols()}x${resized.rows()}")
                 resized
             } else {
                 mat
@@ -244,7 +243,7 @@ class AdvancedFrameProcessor(
             
             // 图像质量检测
             if (!isValidImage(processedMat)) {
-                logger.w(TAG, "Frame is blank/monochrome, skipping")
+                Log.w(TAG, "Frame is blank/monochrome, skipping")
                 return
             }
             
@@ -252,13 +251,13 @@ class AdvancedFrameProcessor(
             if (now - lastForceSaveTime.get() > FORCE_SAVE_INTERVAL) {
                 saveBitmap(bmp, "forced")
                 lastForceSaveTime.set(now)
-                logger.i(TAG, "Force saved valid screenshot")
+                Log.i(TAG, "Force saved valid screenshot")
             }
             
             // 匹配冷却期检查
             val timeSinceLastMatch = now - lastMatchTime.get()
             if (lastMatchTime.get() > 0 && timeSinceLastMatch < config.matchCooldownMs) {
-                logger.d(TAG, "Skip matching: in cooldown (${timeSinceLastMatch}ms / ${config.matchCooldownMs}ms)")
+                Log.d(TAG, "Skip matching: in cooldown (${timeSinceLastMatch}ms / ${config.matchCooldownMs}ms)")
                 return
             }
             
@@ -267,28 +266,28 @@ class AdvancedFrameProcessor(
             if (matchResult != null) {
                 saveBitmap(bmp, matchResult.templateName)
                 lastMatchTime.set(now)
-                logger.i(TAG, "Match saved: ${matchResult.templateName}")
+                Log.i(TAG, "Match saved: ${matchResult.templateName}")
             }
         } catch (e: Exception) {
-            logger.e(TAG, "processFrame error: ${e.message}")
+            Log.e(TAG, "processFrame error: ${e.message}")
         } finally {
             // 确保资源被释放（即使 release 抛异常也要继续）
             try {
                 resized?.release()
             } catch (e: Exception) {
-                logger.e(TAG, "Error releasing resized mat: ${e.message}")
+                Log.e(TAG, "Error releasing resized mat: ${e.message}")
             }
             
             try {
                 mat?.release()
             } catch (e: Exception) {
-                logger.e(TAG, "Error releasing mat: ${e.message}")
+                Log.e(TAG, "Error releasing mat: ${e.message}")
             }
             
             try {
                 bmp?.recycle()
             } catch (e: Exception) {
-                logger.e(TAG, "Error recycling bitmap: ${e.message}")
+                Log.e(TAG, "Error recycling bitmap: ${e.message}")
             }
         }
     }
@@ -318,11 +317,11 @@ class AdvancedFrameProcessor(
             val isValid = stdVal >= MIN_STDDEV
             
             if (!isValid) {
-                logger.d(TAG, "Invalid frame: stdDev=$stdVal (too low)")
+                Log.d(TAG, "Invalid frame: stdDev=$stdVal (too low)")
             }
             isValid
         } catch (e: Exception) {
-            logger.e(TAG, "isValidImage error: ${e.message}")
+                Log.e(TAG, "isValidImage error: ${e.message}")
             false
         } finally {
             roi?.release()
@@ -343,12 +342,12 @@ class AdvancedFrameProcessor(
             // 使用 StorageRepository 保存
             val result = storageRepository.saveScreenshot(bmp, filename)
             result.onSuccess {
-                logger.i(TAG, "Saved: $filename")
+                Log.i(TAG, "Saved: $filename")
             }.onFailure {
-                logger.e(TAG, "Save failed: ${it.message}")
+                Log.e(TAG, "Save failed: ${it.message}")
             }
         } catch (e: Exception) {
-            logger.e(TAG, "saveBitmap error: ${e.message}")
+            Log.e(TAG, "saveBitmap error: ${e.message}")
         }
     }
     
@@ -364,7 +363,7 @@ class AdvancedFrameProcessor(
         frameCallCount.set(0L)
         lastLogTime.set(0L)
         isProcessing.set(false)
-        logger.d(TAG, "AdvancedFrameProcessor reset")
+        Log.d(TAG, "AdvancedFrameProcessor reset")
     }
     
     /**
@@ -374,6 +373,6 @@ class AdvancedFrameProcessor(
         running = false
         timestampFormat.remove()  // 清理 ThreadLocal，避免内存泄漏
         scope.cancel()  // 取消协程作用域
-        logger.d(TAG, "AdvancedFrameProcessor shutdown")
+        Log.d(TAG, "AdvancedFrameProcessor shutdown")
     }
 }

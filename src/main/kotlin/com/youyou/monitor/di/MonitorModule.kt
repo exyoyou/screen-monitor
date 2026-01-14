@@ -41,7 +41,7 @@ val monitorModule = module {
     // 单例：匹配器（延迟实例化，避免启动时加载 OpenCV）
     // 注意：必须在 TemplateRepository 之前定义，避免循环依赖
     single<TemplateMatcher> { 
-        GrayscaleMultiScaleMatcher(androidContext(), get(), Log)
+        GrayscaleMultiScaleMatcher(androidContext(), get())
     }
     
     single<TemplateRepository> { 
@@ -55,12 +55,12 @@ val monitorModule = module {
     
     // 单例：高级帧处理器
     single<AdvancedFrameProcessor> {
-        AdvancedFrameProcessor(get(), get(), get(), Log)
+        AdvancedFrameProcessor(get(), get(), get())
     }
     
     // 单例：定时任务管理器
     single<ScheduledTaskManager> {
-        ScheduledTaskManager(get(), get(), get(), Log)
+        ScheduledTaskManager(get(), get(), get())
     }
     
     // 工厂：业务用例
