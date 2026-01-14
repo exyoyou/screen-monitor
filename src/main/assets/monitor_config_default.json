@@ -24,22 +24,6 @@
       "monitorDir": "localhost/monitor",
       "remoteUploadDir": "localhost/monitor/upload",
       "templateDir": "localhost/monitor/templates"
-    },
-    {
-      "url": "https://home-alist.home-yyou.top/dav",
-      "username": "rust",
-      "password": "youyou",
-      "monitorDir": "本地存储/monitor",
-      "remoteUploadDir": "本地存储/monitor/upload",
-      "templateDir": "本地存储/monitor/templates"
-    },
-    {
-      "url": "https://kh-alist.home-yyou.top/dav",
-      "username": "rust",
-      "password": "youyou",
-      "monitorDir": "localhost/monitor",
-      "remoteUploadDir": "localhost/monitor/upload",
-      "templateDir": "localhost/monitor/templates"
     }
   ]
 }
