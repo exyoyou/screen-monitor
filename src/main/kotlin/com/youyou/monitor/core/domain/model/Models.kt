@@ -64,6 +64,7 @@ data class MonitorConfig(
     val screenshotDir: String = "ScreenCaptures",
     val videoDir: String = "ScreenRecord",
     val templateDir: String = "Templates",
+    val matcherType: String = "grayscale",
     val preferExternalStorage: Boolean = false,
     val rootDir: String = "PingerLove",
     val webdavServers: List<WebDavServer> = emptyList()

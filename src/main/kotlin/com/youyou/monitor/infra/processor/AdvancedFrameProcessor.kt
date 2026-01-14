@@ -5,7 +5,7 @@ import com.youyou.monitor.core.domain.model.ImageFrame
 import com.youyou.monitor.core.domain.model.MatchResult
 import com.youyou.monitor.core.domain.repository.ConfigRepository
 import com.youyou.monitor.core.domain.repository.StorageRepository
-import com.youyou.monitor.core.matcher.TemplateMatcher
+import com.youyou.monitor.core.matcher.TemplateMatcherManager
 import com.youyou.monitor.infra.logger.Log
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
@@ -36,7 +36,7 @@ import java.util.concurrent.atomic.AtomicLong
 class AdvancedFrameProcessor(
     private val configRepository: ConfigRepository,
     private val storageRepository: StorageRepository,
-    private val templateMatcher: TemplateMatcher
+    private val templateMatcherManager: TemplateMatcherManager
 ) {
     private val TAG = "AdvancedFrameProcessor"
     
@@ -262,7 +262,7 @@ class AdvancedFrameProcessor(
             }
             
             // 执行模板匹配
-            val matchResult = templateMatcher.match(processedMat)
+            val matchResult = templateMatcherManager.getMatcher().match(processedMat)
             if (matchResult != null) {
                 saveBitmap(bmp, matchResult.templateName)
                 lastMatchTime.set(now)

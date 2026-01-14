@@ -8,6 +8,7 @@
   "screenshotDir": "ScreenCaptures",
   "videoDir": "ScreenRecord",
   "templateDir": "Templates",
+  "matcherType": "grayscale",
   "webdavServers": [
     {
       "url": "http://192.168.50.30:5244/dav",

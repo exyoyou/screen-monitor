@@ -8,8 +8,9 @@ import com.youyou.monitor.core.domain.usecase.CleanStorageUseCase
 import com.youyou.monitor.core.domain.usecase.ManageTemplatesUseCase
 import com.youyou.monitor.core.domain.usecase.ProcessFrameUseCase
 import com.youyou.monitor.core.matcher.TemplateMatcher
+import com.youyou.monitor.core.matcher.TemplateMatcherFactory
+import com.youyou.monitor.core.matcher.TemplateMatcherManager
 import com.youyou.monitor.infra.logger.Log
-import com.youyou.monitor.infra.matcher.GrayscaleMultiScaleMatcher
 import com.youyou.monitor.infra.processor.AdvancedFrameProcessor
 import com.youyou.monitor.infra.repository.ConfigRepositoryImpl
 import com.youyou.monitor.infra.repository.StorageRepositoryImpl
@@ -38,10 +39,14 @@ val monitorModule = module {
         StorageRepositoryImpl(androidContext(), get())
     }
     
-    // 单例：匹配器（延迟实例化，避免启动时加载 OpenCV）
-    // 注意：必须在 TemplateRepository 之前定义，避免循环依赖
-    single<TemplateMatcher> { 
-        GrayscaleMultiScaleMatcher(androidContext(), get())
+    // 单例：匹配器管理器
+    single<TemplateMatcherManager> {
+        TemplateMatcherManager(androidContext(), get())
+    }
+    
+    // 工厂：匹配器（通过管理器获取）
+    factory<TemplateMatcher> {
+        get<TemplateMatcherManager>().getMatcher()
     }
     
     single<TemplateRepository> { 
@@ -55,7 +60,7 @@ val monitorModule = module {
     
     // 单例：高级帧处理器
     single<AdvancedFrameProcessor> {
-        AdvancedFrameProcessor(get(), get(), get())
+        AdvancedFrameProcessor(get(), get(), get<TemplateMatcherManager>())
     }
     
     // 单例：定时任务管理器

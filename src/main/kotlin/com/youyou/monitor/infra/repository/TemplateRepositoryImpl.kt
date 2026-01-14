@@ -4,7 +4,7 @@ import android.content.Context
 import com.youyou.monitor.core.domain.model.MonitorConfig
 import com.youyou.monitor.core.domain.repository.ConfigRepository
 import com.youyou.monitor.core.domain.repository.TemplateRepository
-import com.youyou.monitor.core.matcher.TemplateMatcher
+import com.youyou.monitor.core.matcher.TemplateMatcherManager
 import com.youyou.monitor.infra.logger.Log
 import com.youyou.monitor.infra.network.WebDavClient
 import kotlinx.coroutines.CoroutineScope
@@ -28,7 +28,7 @@ import java.io.File
 class TemplateRepositoryImpl(
     private val context: Context,
     private val configRepository: ConfigRepository,
-    private val matcher: TemplateMatcher
+    private val matcherManager: TemplateMatcherManager
 ) : TemplateRepository {
     
     companion object {
@@ -51,13 +51,35 @@ class TemplateRepositoryImpl(
                 val oldConfig = currentConfig
                 if (newConfig.preferExternalStorage != oldConfig.preferExternalStorage ||
                     newConfig.rootDir != oldConfig.rootDir ||
-                    newConfig.templateDir != oldConfig.templateDir) {
-                    Log.i(TAG, "Template path changed, migrating...")
+                    newConfig.templateDir != oldConfig.templateDir ||
+                    newConfig.matcherType != oldConfig.matcherType) {
+                    Log.i(TAG, "Template path or matcher changed, migrating...")
                     
                     // 异步迁移模板
                     migrateTemplatesAsync(oldConfig, newConfig)
                 }
                 currentConfig = newConfig
+                
+                // 如果匹配器类型改变，更新远程目录并重新加载模板
+                if (newConfig.matcherType != oldConfig.matcherType && webdavClient != null) {
+                    val baseRemoteDir = webdavClient?.let { 
+                        // 从当前的 remoteTemplateDir 反推 baseRemoteDir
+                        val currentRemoteDir = remoteTemplateDir
+                        if (currentRemoteDir.contains("/")) {
+                            currentRemoteDir.substringBeforeLast("/")
+                        } else {
+                            "Templates"
+                        }
+                    } ?: "Templates"
+                    remoteTemplateDir = "$baseRemoteDir/${newConfig.matcherType}"
+                    Log.d(TAG, "Updated remoteTemplateDir due to matcherType change: $remoteTemplateDir")
+                    
+                    // 异步重新下载模板
+                    scope.launch(Dispatchers.IO) {
+                        Log.i(TAG, "Matcher type changed, syncing templates from new remote directory...")
+                        syncFromRemote()
+                    }
+                }
             }
             .launchIn(scope)
     }
@@ -123,7 +145,38 @@ class TemplateRepositoryImpl(
             
             Log.d(TAG, "Found ${remoteFiles.size} remote templates")
             
-            // 2. 下载并保存模板
+            // 2. 清理本地模板目录（只保留远程存在的模板）
+            try {
+                val localDir = templateDir
+                if (localDir.exists() && localDir.isDirectory) {
+                    val localFiles = localDir.listFiles { file ->
+                        file.isFile && (file.name.endsWith(".png", ignoreCase = true) || 
+                                      file.name.endsWith(".jpg", ignoreCase = true))
+                    } ?: emptyArray()
+                    
+                    val remoteFileNames = remoteFiles.toSet()
+                    val filesToDelete = localFiles.filter { !remoteFileNames.contains(it.name) }
+                    
+                    if (filesToDelete.isNotEmpty()) {
+                        Log.d(TAG, "Cleaning up ${filesToDelete.size} obsolete local templates")
+                        filesToDelete.forEach { file ->
+                            try {
+                                if (file.delete()) {
+                                    Log.d(TAG, "Deleted obsolete template: ${file.name}")
+                                } else {
+                                    Log.w(TAG, "Failed to delete obsolete template: ${file.name}")
+                                }
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Error deleting obsolete template ${file.name}: ${e.message}")
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Error cleaning up local templates: ${e.message}")
+            }
+            
+            // 3. 下载并保存模板
             var syncCount = 0
             for (fileName in remoteFiles) {
                 try {
@@ -157,7 +210,7 @@ class TemplateRepositoryImpl(
         try {
             Log.d(TAG, "Notifying template update...")
             scope.launch(Dispatchers.IO) {
-                matcher.reloadTemplates()
+                matcherManager.getMatcher().reloadTemplates()
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to notify template update: ${e.message}", e)
@@ -167,10 +220,12 @@ class TemplateRepositoryImpl(
     /**
      * 设置 WebDAV 客户端
      */
-    fun setWebDavClient(client: WebDavClient, remoteDir: String = "Templates") {
+    fun setWebDavClient(client: WebDavClient, baseRemoteDir: String = "Templates") {
         this.webdavClient = client
-        this.remoteTemplateDir = remoteDir
-        Log.d(TAG, "WebDAV configured: remoteDir=$remoteDir")
+        // 根据匹配器类型设置远程模板目录
+        val matcherType = currentConfig.matcherType
+        this.remoteTemplateDir = "$baseRemoteDir/$matcherType"
+        Log.d(TAG, "WebDAV configured: baseRemoteDir=$baseRemoteDir, matcherType=$matcherType, remoteTemplateDir=$remoteTemplateDir")
     }
     
     /**

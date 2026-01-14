@@ -294,6 +294,7 @@ class ConfigRepositoryImpl(
             screenshotDir = obj.optString("screenshotDir", "ScreenCaptures"),
             videoDir = obj.optString("videoDir", "ScreenRecord"),
             templateDir = obj.optString("templateDir", "Templates"),
+            matcherType = obj.optString("matcherType", "grayscale"),
             preferExternalStorage = obj.optBoolean("preferExternalStorage", false),
             rootDir = obj.optString("rootDir", "PingerLove"),
             webdavServers = webdavServers
@@ -312,6 +313,7 @@ class ConfigRepositoryImpl(
         obj.put("screenshotDir", config.screenshotDir)
         obj.put("videoDir", config.videoDir)
         obj.put("templateDir", config.templateDir)
+        obj.put("matcherType", config.matcherType)
         obj.put("preferExternalStorage", config.preferExternalStorage)
         obj.put("rootDir", config.rootDir)
         

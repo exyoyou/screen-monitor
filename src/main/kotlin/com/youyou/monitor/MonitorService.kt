@@ -240,7 +240,7 @@ class MonitorService private constructor(
         
         // 启动所有定时任务
         scheduledTaskManager.startAllTasks(
-            configUpdateInterval = 5,     // 5分钟更新配置
+            configUpdateInterval = 1,     // 5分钟更新配置
             imageUploadInterval = 5,       // 5分钟上传截图
             videoUploadInterval = 10,      // 10分钟上传视频
             logUploadInterval = 30,        // 30分钟上传日志
@@ -381,9 +381,9 @@ class MonitorService private constructor(
         
         // 释放 TemplateMatcher 资源（Mat 对象）
         try {
-            get<com.youyou.monitor.core.matcher.TemplateMatcher>().release()
+            get<com.youyou.monitor.core.matcher.TemplateMatcherManager>().release()
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to release TemplateMatcher: ${e.message}")
+            Log.w(TAG, "Failed to release TemplateMatcherManager: ${e.message}")
         }
         
         // 关闭日志系统
