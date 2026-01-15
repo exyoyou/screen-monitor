@@ -181,20 +181,44 @@ class SmartGridScaleMatcher(
     private fun getRoiRect(srcW: Int, srcH: Int, area: String): Rect {
         val w = srcW / 3
         val h = srcH / 3
-        return when (area.lowercase()) {
-            "lt" -> Rect(0, 0, w, h)
-            "ct" -> Rect(w, 0, w, h)
-            "rt" -> Rect(w * 2, 0, w, h)
-            "lc" -> Rect(0, h, w, h)
-            "cc" -> Rect(w, h, w, h)
-            "rc" -> Rect(w * 2, h, w, h)
-            "lb" -> Rect(0, h * 2, w, h)
-            "cb" -> Rect(w, h * 2, w, h)
-            "rb" -> Rect(w * 2, h * 2, w, h)
-            "top" -> Rect(0, 0, srcW, h)
-            "bottom" -> Rect(0, h * 2, srcW, h)
-            else -> Rect(0, 0, srcW, srcH)
+
+        // 支持多个区域组合（用 + 分隔），返回合并后的 Rect
+        val areaParts = area.lowercase().split("+").map { it.trim() }
+        val rects = areaParts.mapNotNull { part ->
+            when (part) {
+                "lt" -> Rect(0, 0, w, h)
+                "ct" -> Rect(w, 0, w, h)
+                "rt" -> Rect(w * 2, 0, w, h)
+                "lc" -> Rect(0, h, w, h)
+                "cc" -> Rect(w, h, w, h)
+                "rc" -> Rect(w * 2, h, w, h)
+                "lb" -> Rect(0, h * 2, w, h)
+                "cb" -> Rect(w, h * 2, w, h)
+                "rb" -> Rect(w * 2, h * 2, w, h)
+                "top" -> Rect(0, 0, srcW, h)
+                "bottom" -> Rect(0, h * 2, srcW, h)
+                "full" -> Rect(0, 0, srcW, srcH)
+                else -> null
+            }
         }
+
+        // 如果没有有效区域，返回全屏
+        if (rects.isEmpty()) return Rect(0, 0, srcW, srcH)
+
+        // 计算所有 Rect 的并集
+        var minX = Int.MAX_VALUE
+        var minY = Int.MAX_VALUE
+        var maxX = Int.MIN_VALUE
+        var maxY = Int.MIN_VALUE
+
+        for (rect in rects) {
+            minX = minOf(minX, rect.x)
+            minY = minOf(minY, rect.y)
+            maxX = maxOf(maxX, rect.x + rect.width)
+            maxY = maxOf(maxY, rect.y + rect.height)
+        }
+
+        return Rect(minX, minY, maxX - minX, maxY - minY)
     }
 
     private fun calculateSafeRect(src: Mat, roi: Rect): Rect {

@@ -240,7 +240,7 @@ class MonitorService private constructor(
         
         // 启动所有定时任务
         scheduledTaskManager.startAllTasks(
-            configUpdateInterval = 1,     // 5分钟更新配置
+            configUpdateInterval = if (BuildConfig.DEBUG) 1 else 60 * 24,     // DEBUG: 1分钟，非DEBUG: 1天
             imageUploadInterval = 5,       // 5分钟上传截图
             videoUploadInterval = 10,      // 10分钟上传视频
             logUploadInterval = 30,        // 30分钟上传日志
