@@ -131,7 +131,7 @@ class GrayscaleMultiScaleMatcher(
         return Pair(newTemplateGrays.size, names)
     }
     
-    override suspend fun match(grayMat: Mat): MatchResult? {
+    override suspend fun match(grayMat: Mat, scale: Int): MatchResult? {
         // 线程安全：读锁保护，本地缓存引用
         val (templates, names) = lock.read {
             Pair(templateGrays, templateNames)

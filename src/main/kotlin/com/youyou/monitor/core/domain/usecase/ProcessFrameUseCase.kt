@@ -83,7 +83,7 @@ class ProcessFrameUseCase(
                 }
                 
                 // 6. 执行模板匹配
-                val result = matcher.match(grayMat)
+                val result = matcher.match(grayMat, frame.scale)
                 if (result != null) {
                     saveBitmap(bitmap, result.templateName)
                     lastMatchTime = now

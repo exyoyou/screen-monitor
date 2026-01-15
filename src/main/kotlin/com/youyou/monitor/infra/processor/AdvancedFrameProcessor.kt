@@ -213,33 +213,10 @@ class AdvancedFrameProcessor(
             mat = Mat()
             Utils.bitmapToMat(bmp, mat)
             
-            // 图像缩放优化
-            // 策略：如果 scale=2（半分辨率），图像已缩小，无需再缩小
-            //      如果 scale=1（原始分辨率），超过 2160p 才缩小以加速匹配
-            val maxDimension = if (frame.scale == 2) {
-                Int.MAX_VALUE  // 已是半分辨率，保持原样
-            } else {
-                MAX_DIMENSION  // 原始分辨率时才检查
-            }
-            
-            val needResize = frame.width > maxDimension || frame.height > maxDimension
-            val processedMat = if (needResize) {
-                val maxDim = maxOf(frame.width, frame.height)
-                val resizeScale = maxDimension.toFloat() / maxDim
-                resized = Mat()
-                val newSize = org.opencv.core.Size(
-                    (mat.cols() * resizeScale).toDouble(),
-                    (mat.rows() * resizeScale).toDouble()
-                )
-                Imgproc.resize(mat, resized, newSize, 0.0, 0.0, Imgproc.INTER_AREA)
-                Log.d(TAG, "Resized: ${frame.width}x${frame.height} -> ${resized.cols()}x${resized.rows()}")
-                resized
-            } else {
-                mat
-            }
-            
             // 转为灰度图
-            Imgproc.cvtColor(processedMat, processedMat, Imgproc.COLOR_RGBA2GRAY)
+            Imgproc.cvtColor(mat, mat, Imgproc.COLOR_RGBA2GRAY)
+            
+            val processedMat = mat
             
             // 图像质量检测
             if (!isValidImage(processedMat)) {
@@ -262,7 +239,7 @@ class AdvancedFrameProcessor(
             }
             
             // 执行模板匹配
-            val matchResult = templateMatcherManager.getMatcher().match(processedMat)
+            val matchResult = templateMatcherManager.getMatcher().match(processedMat, frame.scale)
             if (matchResult != null) {
                 saveBitmap(bmp, matchResult.templateName)
                 lastMatchTime.set(now)

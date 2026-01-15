@@ -2,8 +2,8 @@ package com.youyou.monitor.core.matcher
 
 import android.content.Context
 import com.youyou.monitor.core.domain.repository.ConfigRepository
-import com.youyou.monitor.infra.matcher.ChatWindowMatcher
 import com.youyou.monitor.infra.matcher.GrayscaleMultiScaleMatcher
+import com.youyou.monitor.infra.matcher.SmartGridScaleMatcher
 
 /**
  * 模板匹配器工厂
@@ -27,15 +27,15 @@ object TemplateMatcherFactory {
             "grayscale", "grayscalemultiscale" -> {
                 GrayscaleMultiScaleMatcher(context, configRepository)
             }
-            "chat", "chatwindow" -> {
-                ChatWindowMatcher(context, configRepository)
+            "smart" -> {
+                SmartGridScaleMatcher(context, configRepository)
             }
             // 可以在这里添加其他匹配器类型
             // "color" -> ColorMatcher(context, configRepository)
             // "feature" -> FeatureMatcher(context, configRepository)
             else -> {
                 // 默认使用聊天窗口匹配器（针对用户需求优化）
-                ChatWindowMatcher(context, configRepository)
+                GrayscaleMultiScaleMatcher(context, configRepository)
             }
         }
     }

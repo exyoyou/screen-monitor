@@ -16,9 +16,10 @@ interface TemplateMatcher {
     /**
      * 执行模板匹配
      * @param grayMat 灰度图像（单通道）
+     * @param scale 图像缩放比例（1=全分辨率，2=半分辨率）
      * @return 匹配结果，未匹配返回 null
      */
-    suspend fun match(grayMat: Mat): MatchResult?
+    suspend fun match(grayMat: Mat, scale: Int = 1): MatchResult?
     
     /**
      * 重新加载模板（热更新）
