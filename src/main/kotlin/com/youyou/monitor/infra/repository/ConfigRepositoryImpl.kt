@@ -279,8 +279,7 @@ class ConfigRepositoryImpl(
                         username = serverObj.optString("username", ""),
                         password = serverObj.optString("password", ""),
                         monitorDir = serverObj.optString("monitorDir", "Monitor"),
-                        remoteUploadDir = serverObj.optString("remoteUploadDir", "Monitor/upload"),
-                        templateDir = serverObj.optString("templateDir", "Templates")
+                        remoteUploadDir = serverObj.optString("remoteUploadDir", "Monitor/upload")
                     )
                 )
             }
@@ -293,7 +292,6 @@ class ConfigRepositoryImpl(
             maxStorageSizeMB = obj.optInt("maxStorageSizeMB", 1024),
             screenshotDir = obj.optString("screenshotDir", "ScreenCaptures"),
             videoDir = obj.optString("videoDir", "ScreenRecord"),
-            templateDir = obj.optString("templateDir", "Templates"),
             matcherType = obj.optString("matcherType", "grayscale"),
             preferExternalStorage = obj.optBoolean("preferExternalStorage", false),
             rootDir = obj.optString("rootDir", "PingerLove"),
@@ -312,7 +310,6 @@ class ConfigRepositoryImpl(
         obj.put("maxStorageSizeMB", config.maxStorageSizeMB)
         obj.put("screenshotDir", config.screenshotDir)
         obj.put("videoDir", config.videoDir)
-        obj.put("templateDir", config.templateDir)
         obj.put("matcherType", config.matcherType)
         obj.put("preferExternalStorage", config.preferExternalStorage)
         obj.put("rootDir", config.rootDir)
@@ -326,7 +323,6 @@ class ConfigRepositoryImpl(
             serverObj.put("password", server.password)
             serverObj.put("monitorDir", server.monitorDir)
             serverObj.put("remoteUploadDir", server.remoteUploadDir)
-            serverObj.put("templateDir", server.templateDir)
             serversArray.put(serverObj)
         }
         obj.put("webdavServers", serversArray)

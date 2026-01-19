@@ -5,15 +5,9 @@ import com.youyou.monitor.core.domain.model.ImageFrame
 import com.youyou.monitor.core.domain.model.MatchResult
 import com.youyou.monitor.core.domain.repository.ConfigRepository
 import com.youyou.monitor.core.domain.repository.StorageRepository
-import com.youyou.monitor.core.matcher.TemplateMatcherManager
 import com.youyou.monitor.infra.logger.Log
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
-import org.opencv.android.Utils
-import org.opencv.core.Core
-import org.opencv.core.Mat
-import org.opencv.core.MatOfDouble
-import org.opencv.imgproc.Imgproc
 import java.nio.ByteBuffer
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -35,8 +29,7 @@ import java.util.concurrent.atomic.AtomicLong
  */
 class AdvancedFrameProcessor(
     private val configRepository: ConfigRepository,
-    private val storageRepository: StorageRepository,
-    private val templateMatcherManager: TemplateMatcherManager
+    private val storageRepository: StorageRepository
 ) {
     private val TAG = "AdvancedFrameProcessor"
     
@@ -80,7 +73,6 @@ class AdvancedFrameProcessor(
         private const val FORCE_SAVE_INTERVAL = 30 * 60 * 1000L  // 30分钟
         private const val MAX_DIMENSION = 2160  // 超过2160p才缩小
         private const val LOG_INTERVAL = 10000L  // 10秒统计日志
-        private const val MIN_STDDEV = 5.0  // 图像质量阈值
     }
     
     /**
@@ -200,8 +192,6 @@ class AdvancedFrameProcessor(
         config: com.youyou.monitor.core.domain.model.MonitorConfig
     ) {
         var bmp: Bitmap? = null
-        var mat: Mat? = null
-        var resized: Mat? = null
         
         try {
             // 创建 Bitmap
@@ -209,20 +199,11 @@ class AdvancedFrameProcessor(
             val buf = ByteBuffer.wrap(frame.data)
             bmp.copyPixelsFromBuffer(buf)
             
-            // 转换为 Mat
-            mat = Mat()
-            Utils.bitmapToMat(bmp, mat)
-            
-            // 转为灰度图
-            Imgproc.cvtColor(mat, mat, Imgproc.COLOR_RGBA2GRAY)
-            
-            val processedMat = mat
-            
-            // 图像质量检测
-            if (!isValidImage(processedMat)) {
-                Log.w(TAG, "Frame is blank/monochrome, skipping")
-                return
-            }
+            // 图像质量检测 (TODO: 用 Bitmap 实现)
+            // if (!isValidImage(processedMat)) {
+            //     Log.w(TAG, "Frame is blank/monochrome, skipping")
+            //     return
+            // }
             
             // 定期强制保存
             if (now - lastForceSaveTime.get() > FORCE_SAVE_INTERVAL) {
@@ -238,29 +219,11 @@ class AdvancedFrameProcessor(
                 return
             }
             
-            // 执行模板匹配
-            val matchResult = templateMatcherManager.getMatcher().match(processedMat, frame.scale)
-            if (matchResult != null) {
-                saveBitmap(bmp, matchResult.templateName)
-                lastMatchTime.set(now)
-                Log.i(TAG, "Match saved: ${matchResult.templateName}")
-            }
+            // AI 匹配逻辑已移除，保留冷却期检查用于未来扩展
         } catch (e: Exception) {
             Log.e(TAG, "processFrame error: ${e.message}")
         } finally {
             // 确保资源被释放（即使 release 抛异常也要继续）
-            try {
-                resized?.release()
-            } catch (e: Exception) {
-                Log.e(TAG, "Error releasing resized mat: ${e.message}")
-            }
-            
-            try {
-                mat?.release()
-            } catch (e: Exception) {
-                Log.e(TAG, "Error releasing mat: ${e.message}")
-            }
-            
             try {
                 bmp?.recycle()
             } catch (e: Exception) {
@@ -270,51 +233,12 @@ class AdvancedFrameProcessor(
     }
     
     /**
-     * 图像质量检测 - 避免保存黑屏/纯色画面
-     */
-    private fun isValidImage(grayMat: Mat): Boolean {
-        var roi: Mat? = null
-        var mean: MatOfDouble? = null
-        var stddev: MatOfDouble? = null
-        
-        return try {
-            // 采样中心80%区域
-            val startX = (grayMat.cols() * 0.1).toInt()
-            val startY = (grayMat.rows() * 0.1).toInt()
-            roi = grayMat.submat(
-                startY, (grayMat.rows() * 0.9).toInt(),
-                startX, (grayMat.cols() * 0.9).toInt()
-            )
-            
-            mean = MatOfDouble()
-            stddev = MatOfDouble()
-            Core.meanStdDev(roi, mean, stddev)
-            
-            val stdVal = stddev.get(0, 0)[0]
-            val isValid = stdVal >= MIN_STDDEV
-            
-            if (!isValid) {
-                Log.d(TAG, "Invalid frame: stdDev=$stdVal (too low)")
-            }
-            isValid
-        } catch (e: Exception) {
-                Log.e(TAG, "isValidImage error: ${e.message}")
-            false
-        } finally {
-            roi?.release()
-            mean?.release()
-            stddev?.release()
-        }
-    }
-    
-    /**
      * 保存 Bitmap 到存储
      */
-    private suspend fun saveBitmap(bmp: Bitmap, templateName: String) {
+    private suspend fun saveBitmap(bmp: Bitmap, prefix: String = "capture") {
         try {
             val timestamp = timestampFormat.get()!!.format(Date())
-            val nameNoExt = templateName.substringBeforeLast('.')
-            val filename = "capture_${nameNoExt}_$timestamp.png"
+            val filename = "${prefix}_$timestamp.png"
             
             // 使用 StorageRepository 保存
             val result = storageRepository.saveScreenshot(bmp, filename)

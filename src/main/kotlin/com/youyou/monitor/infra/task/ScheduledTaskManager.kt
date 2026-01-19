@@ -2,7 +2,6 @@ package com.youyou.monitor.infra.task
 
 import com.youyou.monitor.core.domain.repository.ConfigRepository
 import com.youyou.monitor.core.domain.repository.StorageRepository
-import com.youyou.monitor.core.domain.repository.TemplateRepository
 import com.youyou.monitor.infra.logger.Log
 import com.youyou.monitor.infra.network.WebDavClient
 import kotlinx.coroutines.*
@@ -22,7 +21,6 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 class ScheduledTaskManager(
     private val configRepository: ConfigRepository,
-    private val templateRepository: TemplateRepository,
     private val storageRepository: StorageRepository
 ) {
     private val TAG = "ScheduledTaskManager"
@@ -53,7 +51,6 @@ class ScheduledTaskManager(
         imageUploadInterval: Long = 5,
         videoUploadInterval: Long = 10,
         logUploadInterval: Long = 30,
-        templateSyncInterval: Long = 60,
         storageCleanInterval: Long = 360  // 6小时
     ) {
         if (isStarted) {
@@ -76,10 +73,7 @@ class ScheduledTaskManager(
         // 4. 定时上传日志
         startLogUploadTask(logUploadInterval)
         
-        // 5. 定时同步模板
-        startTemplateSyncTask(templateSyncInterval)
-        
-        // 6. 定时清理存储
+        // 5. 定时清理存储
         startStorageCleanTask(storageCleanInterval)
     }
     
@@ -174,37 +168,6 @@ class ScheduledTaskManager(
         }
         jobs.add(job)
         Log.d(TAG, "Log upload task started (interval: ${intervalMinutes}min)")
-    }
-    
-    /**
-     * 定时同步模板
-     */
-    private fun startTemplateSyncTask(intervalMinutes: Long) {
-        val job = scope.launch {
-            delay(2000)  // 初始延迟2秒
-            while (isActive) {
-                try {
-                    val client = webdavClient
-                    if (client != null) {
-                        val result = templateRepository.syncFromRemote()
-                        result.onSuccess { count ->
-                            if (count > 0) {
-                                Log.i(TAG, "Templates synced: $count files")
-                            }
-                        }.onFailure {
-                            Log.w(TAG, "Template sync failed: ${it.message}")
-                        }
-                    } else {
-                        Log.w(TAG, "WebDAV client not configured, skipping template sync")
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Template sync task error: ${e.message}")
-                }
-                delay(intervalMinutes * 60 * 1000)
-            }
-        }
-        jobs.add(job)
-        Log.d(TAG, "Template sync task started (interval: ${intervalMinutes}min)")
     }
     
     /**
@@ -408,7 +371,12 @@ class ScheduledTaskManager(
             }
             
             // 获取日志目录
-            val logDir = File(Log.getLogDirectory())
+            val logDirPath = Log.getLogDirectory()
+            if (logDirPath == null) {
+                Log.w(TAG, "Log directory not available")
+                return
+            }
+            val logDir = File(logDirPath)
             if (!logDir.exists() || !logDir.isDirectory) {
                 return
             }

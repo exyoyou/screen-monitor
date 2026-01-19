@@ -38,7 +38,24 @@ class WebDavClient(
         const val DEFAULT_WRITE_TIMEOUT_MS = 30000L   // 写入超时 30s
         
         /**
-         * 工厂方法：从 WebDavServer 配置创建客户端
+         * 工厂方法：从 AI WebDavServer 配置创建客户端
+         */
+        fun fromAiServer(
+            server: com.youyou.monitor.core.domain.model.AiWebDavServer,
+            deviceIdProvider: (() -> String)? = null
+        ): WebDavClient {
+            return WebDavClient(
+                webdavUrl = server.url,
+                username = server.username,
+                password = server.password,
+                monitorDir = server.baseDir,  // AI使用baseDir作为monitorDir
+                remoteUploadDir = "${server.baseDir}/upload",  // 默认upload目录
+                deviceIdProvider = deviceIdProvider ?: { "" }
+            )
+        }
+
+        /**
+         * 工厂方法：从旧的 WebDavServer 配置创建客户端（向后兼容）
          */
         fun fromServer(
             server: com.youyou.monitor.core.domain.model.WebDavServer,

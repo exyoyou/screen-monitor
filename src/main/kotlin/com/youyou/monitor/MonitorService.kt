@@ -3,15 +3,11 @@ package com.youyou.monitor
 import android.content.Context
 import com.youyou.monitor.core.domain.model.ImageFrame
 import com.youyou.monitor.core.domain.model.MonitorConfig
-import com.youyou.monitor.core.domain.usecase.CleanStorageUseCase
-import com.youyou.monitor.core.domain.usecase.ManageTemplatesUseCase
-import com.youyou.monitor.core.domain.usecase.ProcessFrameUseCase
 import com.youyou.monitor.infra.logger.Log
 import com.youyou.monitor.infra.network.WebDavClient
 import com.youyou.monitor.infra.processor.AdvancedFrameProcessor
 import com.youyou.monitor.core.domain.repository.ConfigRepository
 import com.youyou.monitor.infra.repository.ConfigRepositoryImpl
-import com.youyou.monitor.infra.repository.TemplateRepositoryImpl
 import com.youyou.monitor.infra.task.ScheduledTaskManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -24,7 +20,6 @@ import kotlinx.coroutines.withContext
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 import org.koin.core.component.inject
-import org.opencv.android.OpenCVLoader
 import java.nio.ByteBuffer
 
 /**
@@ -34,7 +29,7 @@ import java.nio.ByteBuffer
  * - 高级帧处理（频率限制、去重、质量检测）
  * - 定时任务（配置同步、上传、清理）
  * - WebDAV 配置管理
- * - 模板同步
+ * - AI 模型同步
  * 
  * 使用示例：
  * ```kotlin
@@ -81,14 +76,7 @@ class MonitorService private constructor(
                             Log.init(context)
                             Log.i(TAG, "Log system initialized")
                             
-                            // 2. 初始化 OpenCV
-                            if (!OpenCVLoader.initDebug()) {
-                                Log.e(TAG, "OpenCV initialization failed!")
-                                throw RuntimeException("OpenCV initialization failed")
-                            }
-                            Log.i(TAG, "OpenCV initialized successfully")
-                            
-                            // 3. 初始化 Koin（注意：initKoin 内部也会调用 Log.init，但这里已经初始化过了）
+                            // 2. 初始化 Koin（注意：initKoin 内部也会调用 Log.init，但这里已经初始化过了）
                             com.youyou.monitor.di.initKoin(context)
                             this.deviceIdProvider = deviceIdProvider
                             instance = MonitorService(context.applicationContext)
@@ -115,13 +103,10 @@ class MonitorService private constructor(
     }
     
     // 依赖注入
-    private val processFrameUseCase: ProcessFrameUseCase by inject()
-    private val manageTemplatesUseCase: ManageTemplatesUseCase by inject()
-    private val cleanStorageUseCase: CleanStorageUseCase by inject()
     private val advancedFrameProcessor: AdvancedFrameProcessor by inject()
     private val scheduledTaskManager: ScheduledTaskManager by inject()
     private val configRepository: ConfigRepository by inject()  // 修改：注入接口而不是实现类
-    private val templateRepository: com.youyou.monitor.core.domain.repository.TemplateRepository by inject()
+    private val modelRepository: com.youyou.monitor.core.domain.repository.ModelRepository by inject()
     
     // 协程作用域（使用 lazy 延迟初始化，支持 stop 后重新 start）
     @Volatile
@@ -244,7 +229,6 @@ class MonitorService private constructor(
             imageUploadInterval = 5,       // 5分钟上传截图
             videoUploadInterval = 10,      // 10分钟上传视频
             logUploadInterval = 30,        // 30分钟上传日志
-            templateSyncInterval = 60,     // 60分钟同步模板
             storageCleanInterval = 360     // 6小时清理存储
         )
     }
@@ -270,14 +254,21 @@ class MonitorService private constructor(
             
             // 配置到各个 Repository
             (configRepository as? ConfigRepositoryImpl)?.setWebDavClient(client)
-            (templateRepository as? TemplateRepositoryImpl)?.setWebDavClient(client, server.templateDir)
             scheduledTaskManager.setWebDavClient(client)
+            (modelRepository as? com.youyou.monitor.infra.repository.ModelRepositoryImpl)?.setWebDavClient(client)
             
-            // 同步模板
-            templateRepository.syncFromRemote().onSuccess {
-                Log.i(TAG, "Templates synced: $it templates")
-            }.onFailure {
-                Log.w(TAG, "Template sync failed: ${it.message}")
+            // 同步 AI 模型
+            try {
+                Log.d(TAG, "Syncing AI models from remote...")
+                val syncResult = modelRepository.syncModelsFromRemote()
+                if (syncResult.isSuccess) {
+                    val syncedCount = syncResult.getOrNull() ?: 0
+                    Log.i(TAG, "AI models sync completed: $syncedCount models downloaded")
+                } else {
+                    Log.w(TAG, "AI models sync failed: ${syncResult.exceptionOrNull()?.message}")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "AI models sync error: ${e.message}")
             }
             
             Log.i(TAG, "WebDAV configured with fastest server")
@@ -379,13 +370,6 @@ class MonitorService private constructor(
             frameBuffer = null
         }
         
-        // 释放 TemplateMatcher 资源（Mat 对象）
-        try {
-            get<com.youyou.monitor.core.matcher.TemplateMatcherManager>().release()
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to release TemplateMatcherManager: ${e.message}")
-        }
-        
         // 关闭日志系统
         com.youyou.monitor.infra.logger.Log.shutdown()
     }
@@ -445,20 +429,6 @@ class MonitorService private constructor(
             Log.e(TAG, "Failed to launch frame processing: ${e.message}", e)
             isProcessingFrame = false
         }
-    }
-    
-    /**
-     * 手动同步模板
-     */
-    suspend fun syncTemplates(): Result<Unit> {
-        return manageTemplatesUseCase.syncTemplates()
-    }
-    
-    /**
-     * 清理存储
-     */
-    suspend fun cleanStorage(): Int {
-        return cleanStorageUseCase.cleanup()
     }
     
     /**

@@ -1,10 +1,10 @@
 package com.youyou.monitor.core.domain.model
 
 /**
- * 模板匹配结果
+ * 检测结果
  */
 data class MatchResult(
-    val templateName: String,
+    val detectedApp: String,
     val score: Double,
     val scale: Float,
     val timeMs: Long,
@@ -49,8 +49,7 @@ data class WebDavServer(
     val username: String,
     val password: String,
     val monitorDir: String = "Monitor",
-    val remoteUploadDir: String = "Monitor/upload",
-    val templateDir: String = "Templates"
+    val remoteUploadDir: String = "Monitor/upload"
 )
 
 /**
@@ -63,13 +62,43 @@ data class MonitorConfig(
     val maxStorageSizeMB: Int = 1024,
     val screenshotDir: String = "ScreenCaptures",
     val videoDir: String = "ScreenRecord",
-    val templateDir: String = "Templates",
     val matcherType: String = "grayscale",
     val preferExternalStorage: Boolean = false,
     val rootDir: String = "PingerLove",
-    val webdavServers: List<WebDavServer> = emptyList()
+    val webdavServers: List<WebDavServer> = emptyList(),
+    val modelId: String? = null,  // 当前使用的AI模型ID
+    val aiModelDir: String = "AI/Models",  // AI模型远程目录
+    val aiConfigDir: String = "AI/Config",  // AI配置远程目录
+    val enableModelAutoSync: Boolean = true,  // 是否启用模型自动同步
+    val modelSyncIntervalHours: Int = 24  // 模型同步间隔（小时）
 ) {
     companion object {
         fun default() = MonitorConfig()
+    }
+}
+
+/**
+ * AI WebDAV 服务器配置
+ */
+data class AiWebDavServer(
+    val url: String,
+    val username: String,
+    val password: String,
+    val baseDir: String = ""  // 基础目录，所有AI相关文件都在此目录下
+)
+
+/**
+ * AI 模型配置
+ */
+data class AiConfig(
+    val currentModelId: String = "chat_detector_v1",
+    val enableAutoSync: Boolean = true,
+    val syncIntervalHours: Int = 24,
+    val remoteModelDir: String = "AI/Models",
+    val remoteConfigDir: String = "AI/Config",
+    val webdavServers: List<AiWebDavServer> = emptyList()
+) {
+    companion object {
+        fun default() = AiConfig()
     }
 }

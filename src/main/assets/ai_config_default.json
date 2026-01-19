@@ -1,0 +1,21 @@
+{
+  "currentModelId": "chat_detector_v1",
+  "enableAutoSync": true,
+  "syncIntervalHours": 24,
+  "remoteModelDir": "AI/Models",
+  "remoteConfigDir": "AI/Config",
+  "webdavServers": [
+    {
+      "url": "http://192.168.50.30:5244/dav",
+      "username": "rust",
+      "password": "youyou",
+      "baseDir": "本地存储/monitor/AI"
+    },
+    {
+      "url": "http://192.168.100.100:5244/dav",
+      "username": "rust",
+      "password": "youyou",
+      "baseDir": "localhost/monitor/AI"
+    }
+  ]
+}

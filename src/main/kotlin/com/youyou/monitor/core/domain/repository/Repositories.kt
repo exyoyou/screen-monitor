@@ -32,19 +32,89 @@ interface ConfigRepository {
 }
 
 /**
- * 模板仓储接口
+ * AI 模型仓储接口
  */
-interface TemplateRepository {
+interface ModelRepository {
     /**
-     * 从远程同步模板
+     * 获取当前使用的模型信息
      */
-    suspend fun syncFromRemote(): Result<Int>
-    
+    suspend fun getCurrentModel(): ModelInfo?
+
     /**
-     * 通知模板已更新（触发重新加载）
+     * 列出所有可用的模型
      */
-    fun notifyTemplatesUpdated()
+    suspend fun listAvailableModels(): List<ModelInfo>
+
+    /**
+     * 切换到指定的模型
+     */
+    suspend fun switchModel(modelId: String): Result<ModelInfo>
+
+    /**
+     * 从远程同步模型
+     */
+    suspend fun syncModelsFromRemote(): Result<Int>
+
+    /**
+     * 同步模型配置到远程服务器
+     */
+    suspend fun syncModelConfigToRemote(): Result<Unit>
+
+    /**
+     * 下载指定模型
+     */
+    suspend fun downloadModel(modelId: String): Result<ModelInfo>
+
+    /**
+     * 删除指定的模型
+     */
+    suspend fun deleteModel(modelId: String): Result<Unit>
 }
+
+/**
+ * AI 配置仓储接口
+ */
+interface AiConfigRepository {
+    /**
+     * 获取AI配置流
+     */
+    fun getAiConfigFlow(): kotlinx.coroutines.flow.Flow<com.youyou.monitor.core.domain.model.AiConfig>
+
+    /**
+     * 获取当前AI配置
+     */
+    suspend fun getCurrentAiConfig(): com.youyou.monitor.core.domain.model.AiConfig
+
+    /**
+     * 更新AI配置
+     */
+    suspend fun updateAiConfig(config: com.youyou.monitor.core.domain.model.AiConfig)
+
+    /**
+     * 从远程同步AI配置
+     */
+    suspend fun syncFromRemote(): Result<Unit>
+
+    /**
+     * 同步AI配置到远程
+     */
+    suspend fun syncToRemote(): Result<Unit>
+}
+
+/**
+ * 模型信息
+ */
+data class ModelInfo(
+    val id: String,
+    val name: String,
+    val version: String,
+    val fileName: String,
+    val fileSize: Long,
+    val description: String? = null,
+    val isDownloaded: Boolean = false,
+    val downloadUrl: String? = null,
+    val lastModified: Long = 0L
+)
 
 /**
  * 存储仓储接口

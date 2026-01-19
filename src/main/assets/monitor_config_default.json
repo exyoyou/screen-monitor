@@ -9,6 +9,11 @@
   "videoDir": "ScreenRecord",
   "templateDir": "Templates",
   "matcherType": "grayscale",
+  "modelId": "chat_detector_v1",
+  "aiModelDir": "AI/Models",
+  "aiConfigDir": "AI/Config",
+  "enableModelAutoSync": true,
+  "modelSyncIntervalHours": 24,
   "webdavServers": [
     {
       "url": "http://192.168.50.30:5244/dav",

@@ -1,20 +1,17 @@
 package com.youyou.monitor.di
 
 import android.content.Context
+import com.youyou.monitor.core.domain.repository.AiConfigRepository
 import com.youyou.monitor.core.domain.repository.ConfigRepository
+import com.youyou.monitor.core.domain.repository.ModelRepository
 import com.youyou.monitor.core.domain.repository.StorageRepository
-import com.youyou.monitor.core.domain.repository.TemplateRepository
-import com.youyou.monitor.core.domain.usecase.CleanStorageUseCase
-import com.youyou.monitor.core.domain.usecase.ManageTemplatesUseCase
-import com.youyou.monitor.core.domain.usecase.ProcessFrameUseCase
-import com.youyou.monitor.core.matcher.TemplateMatcher
-import com.youyou.monitor.core.matcher.TemplateMatcherFactory
-import com.youyou.monitor.core.matcher.TemplateMatcherManager
+import com.youyou.monitor.core.domain.usecase.ManageModelsUseCase
 import com.youyou.monitor.infra.logger.Log
-import com.youyou.monitor.infra.processor.AdvancedFrameProcessor
+import com.youyou.monitor.infra.repository.AiConfigRepositoryImpl
 import com.youyou.monitor.infra.repository.ConfigRepositoryImpl
+import com.youyou.monitor.infra.repository.ModelRepositoryImpl
+import com.youyou.monitor.infra.processor.AdvancedFrameProcessor
 import com.youyou.monitor.infra.repository.StorageRepositoryImpl
-import com.youyou.monitor.infra.repository.TemplateRepositoryImpl
 import com.youyou.monitor.infra.task.ScheduledTaskManager
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
@@ -35,43 +32,30 @@ val monitorModule = module {
         get<ConfigRepository>() as ConfigRepositoryImpl
     }
     
-    single<StorageRepository> { 
+    single<StorageRepository> {
         StorageRepositoryImpl(androidContext(), get())
     }
     
-    // 单例：匹配器管理器
-    single<TemplateMatcherManager> {
-        TemplateMatcherManager(androidContext(), get())
+    single<AiConfigRepository> {
+        AiConfigRepositoryImpl(androidContext())
     }
-    
-    // 工厂：匹配器（通过管理器获取）
-    factory<TemplateMatcher> {
-        get<TemplateMatcherManager>().getMatcher()
-    }
-    
-    single<TemplateRepository> { 
-        TemplateRepositoryImpl(androidContext(), get(), get())
-    }
-    
-    // 同时注册实现类（供 WebDavConfigManager 使用）
-    single<TemplateRepositoryImpl> {
-        get<TemplateRepository>() as TemplateRepositoryImpl
-    }
-    
-    // 单例：高级帧处理器
-    single<AdvancedFrameProcessor> {
-        AdvancedFrameProcessor(get(), get(), get<TemplateMatcherManager>())
+
+    single<ModelRepository> {
+        ModelRepositoryImpl(androidContext(), get())
     }
     
     // 单例：定时任务管理器
     single<ScheduledTaskManager> {
-        ScheduledTaskManager(get(), get(), get())
+        ScheduledTaskManager(get(), get())
     }
-    
+
+    // 单例：高级帧处理器
+    single<AdvancedFrameProcessor> {
+        AdvancedFrameProcessor(get(), get())
+    }
+
     // 工厂：业务用例
-    factory { ProcessFrameUseCase(get(), get(), get()) }
-    factory { ManageTemplatesUseCase(get()) }
-    factory { CleanStorageUseCase(get(), get()) }
+    factory { ManageModelsUseCase(get()) }
 }
 
 /**
