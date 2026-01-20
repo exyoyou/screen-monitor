@@ -482,4 +482,11 @@ class MonitorService private constructor(
         val storageRepo: com.youyou.monitor.core.domain.repository.StorageRepository by inject()
         return storageRepo.getRootDirPath()
     }
+    
+    /**
+     * 获取应用上下文（用于需要 Context 的组件）
+     */
+    fun getApplicationContext(): Context {
+        return context
+    }
 }

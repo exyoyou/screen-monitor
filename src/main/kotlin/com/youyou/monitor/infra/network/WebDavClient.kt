@@ -1,5 +1,8 @@
 package com.youyou.monitor.infra.network
 
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import com.youyou.monitor.infra.logger.Log
 import com.thegrizzlylabs.sardineandroid.impl.OkHttpSardine
 import kotlinx.coroutines.Dispatchers
@@ -114,6 +117,17 @@ class WebDavClient(
     }
 
     /**
+     * 检查当前网络是否为WiFi
+     */
+    private fun isWifiConnected(): Boolean {
+        val context = com.youyou.monitor.MonitorService.getInstance().getApplicationContext()
+        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val network = connectivityManager.activeNetwork ?: return false
+        val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+        return capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+    }
+
+    /**
      * 测试连接
      */
     suspend fun testConnection(): Boolean = withContext(Dispatchers.IO) {
@@ -146,6 +160,11 @@ class WebDavClient(
         
         if (isLargeFile) {
             Log.d(TAG, "Large file detected (${file.length() / 1024 / 1024}MB)")
+            // 检查网络类型：大文件只允许在WiFi下上传
+            if (!isWifiConnected()) {
+                Log.e(TAG, "Large file upload failed: not connected to WiFi")
+                return@withContext false
+            }
         }
         
         // 缓存 deviceId，避免重复调用 getter
