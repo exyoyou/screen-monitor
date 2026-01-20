@@ -37,21 +37,21 @@ class WebDavConfigManager(
      */
     private suspend fun syncAll(client: WebDavClient) {
         try {
-            Log.d(TAG, "Syncing config and templates...")
+            Log.d(TAG, "正在同步配置和模板...")
             
             // 同步配置
             configRepo.syncFromRemote().onFailure {
-                Log.w(TAG, "Config sync failed: ${it.message}")
+                Log.w(TAG, "配置同步失败: ${it.message}")
             }
             
             // 同步模板
             templateRepo.syncFromRemote().onSuccess {
-                Log.i(TAG, "Templates synced successfully")
+                Log.i(TAG, "模板同步成功")
             }.onFailure {
-                Log.w(TAG, "Template sync failed: ${it.message}")
+                Log.w(TAG, "模板同步失败: ${it.message}")
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Sync failed: ${e.message}", e)
+            Log.e(TAG, "同步失败: ${e.message}", e)
         }
     }
 }

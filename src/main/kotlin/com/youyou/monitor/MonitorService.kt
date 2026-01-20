@@ -83,14 +83,14 @@ class MonitorService private constructor(
                         try {
                             // 1. 最先初始化日志系统
                             Log.init(context)
-                            Log.i(TAG, "Log system initialized")
+                            Log.i(TAG, "日志系统初始化完成")
                             
                             // 2. 初始化 OpenCV
                             if (!OpenCVLoader.initDebug()) {
-                                Log.e(TAG, "OpenCV initialization failed!")
+                                Log.e(TAG, "OpenCV初始化失败！")
                                 throw RuntimeException("OpenCV initialization failed")
                             }
-                            Log.i(TAG, "OpenCV initialized successfully")
+                            Log.i(TAG, "OpenCV初始化成功")
                             
                             // 3. 初始化 Koin（注意：initKoin 内部也会调用 Log.init，但这里已经初始化过了）
                             com.youyou.monitor.di.initKoin(context)
@@ -98,7 +98,7 @@ class MonitorService private constructor(
                             instance = MonitorService(context.applicationContext)
                             
                             // 不要在 init 时调用 deviceIdProvider，避免过早触发 FFI.getMyId()
-                            Log.i(TAG, "MonitorService initialized successfully (deviceIdProvider=${if (deviceIdProvider != null) "provided" else "null"})")
+                            Log.i(TAG, "MonitorService初始化成功 (deviceIdProvider=${if (deviceIdProvider != null) "已提供" else "未提供"})")
                         } catch (e: Exception) {
                             Log.e(TAG, "Initialization failed: ${e.message}", e)
                             throw e  // 重新抛出，确保调用方知道失败
@@ -113,7 +113,7 @@ class MonitorService private constructor(
          */
         fun getInstance(): MonitorService {
             return instance ?: throw IllegalStateException(
-                "MonitorService not initialized. Call init(context) first."
+                "MonitorService未初始化，请先调用init(context)。"
             )
         }
     }
@@ -184,12 +184,12 @@ class MonitorService private constructor(
         private var lastNetworkType: String? = null
         
         override fun onAvailable(network: Network) {
-            Log.d(TAG, "Network available: $network")
+            Log.d(TAG, "网络可用: $network")
             checkNetworkChange()
         }
         
         override fun onLost(network: Network) {
-            Log.d(TAG, "Network lost: $network")
+            Log.d(TAG, "网络丢失: $network")
             checkNetworkChange()
         }
         
@@ -201,17 +201,17 @@ class MonitorService private constructor(
             }
             
             if (currentType != lastNetworkType) {
-                Log.i(TAG, "Network type changed: $lastNetworkType -> $currentType")
+                Log.i(TAG, "网络类型变化: $lastNetworkType -> $currentType")
                 lastNetworkType = currentType
                 
                 // 网络类型变化时，重新评估WebDAV配置
                 if (isRunning) {
                     getScope().launch(Dispatchers.IO) {
                         try {
-                            Log.i(TAG, "Re-evaluating WebDAV configuration due to network change")
+                            Log.i(TAG, "由于网络变化，正在重新评估WebDAV配置")
                             reconfigureWebDavForNetwork()
                         } catch (e: Exception) {
-                            Log.e(TAG, "Failed to reconfigure WebDAV on network change: ${e.message}", e)
+                            Log.e(TAG, "网络变化时重新配置WebDAV失败: ${e.message}", e)
                         }
                     }
                 }
@@ -226,7 +226,7 @@ class MonitorService private constructor(
                     try {
                         reconfigureWebDavForNetwork()
                     } catch (e: Exception) {
-                        Log.w(TAG, "Network change reconfiguration failed: ${e.message}")
+                        Log.w(TAG, "网络变化重新配置失败: ${e.message}")
                     }
                 }
             }
@@ -234,7 +234,7 @@ class MonitorService private constructor(
     }
     
     init {
-        Log.d(TAG, "MonitorService initialized")
+        Log.d(TAG, "MonitorService已初始化")
         
         // 注册网络变化监听器
         val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -242,7 +242,7 @@ class MonitorService private constructor(
             .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
             .build()
         connectivityManager.registerNetworkCallback(networkRequest, networkCallback)
-        Log.d(TAG, "Network change listener registered")
+        Log.d(TAG, "网络变化监听器已注册")
         
         // 设置设备ID提供者到 ConfigRepository
         (configRepository as? ConfigRepositoryImpl)?.setDeviceIdProvider(Companion.deviceIdProvider)
@@ -251,11 +251,11 @@ class MonitorService private constructor(
         (configRepository as? ConfigRepositoryImpl)?.setOnWebDavServersChanged { newServers, fastestServer, fastestClient ->
             // 只在运行中才处理回调，避免 stop() 后创建新的协程
             if (!isRunning) {
-                Log.d(TAG, "Service not running, skipping WebDAV reconfiguration")
+                Log.d(TAG, "服务未运行，跳过WebDAV重新配置")
                 return@setOnWebDavServersChanged
             }
             
-            Log.i(TAG, "WebDAV servers changed, auto-reconfiguring with fastest server: ${fastestServer?.url}")
+            Log.i(TAG, "WebDAV服务器已变化，自动重新配置最快服务器: ${fastestServer?.url}")
             try {
                 getScope().launch {
                     // 使用 ConfigRepository 选择的最快服务器
@@ -266,7 +266,7 @@ class MonitorService private constructor(
                     }
                 }
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to launch WebDAV reconfiguration: ${e.message}")
+                Log.w(TAG, "启动WebDAV重新配置失败: ${e.message}")
             }
         }
     }
@@ -277,12 +277,12 @@ class MonitorService private constructor(
      * 启动监控
      */
     fun start() {
-        Log.i(TAG, "=== MonitorService.start() called ===")
+        Log.i(TAG, "=== MonitorService.start() 被调用 ===")
         
         // 原子检查并设置（防止并发调用）
         synchronized(this) {
             if (isRunning) {
-                Log.w(TAG, "Already running, skipping start")
+                Log.w(TAG, "已在运行中，跳过启动")
                 return
             }
             isRunning = true
@@ -290,17 +290,17 @@ class MonitorService private constructor(
         
         // 重置处理器状态
         advancedFrameProcessor.reset()
-        Log.d(TAG, "Frame processor reset")
+        Log.d(TAG, "帧处理器已重置")
         
         // 自动加载配置（首次从 assets，后续从 WebDAV）
-        Log.d(TAG, "Launching autoLoadConfiguration coroutine...")
+        Log.d(TAG, "正在启动autoLoadConfiguration协程...")
         getScope().launch(Dispatchers.IO) {
             try {
-                Log.d(TAG, "autoLoadConfiguration coroutine started on IO dispatcher")
+                Log.d(TAG, "autoLoadConfiguration协程在IO调度器上启动")
                 autoLoadConfiguration()
-                Log.d(TAG, "autoLoadConfiguration completed")
+                Log.d(TAG, "autoLoadConfiguration已完成")
             } catch (e: Exception) {
-                Log.e(TAG, "Auto load configuration failed: ${e.message}", e)
+                Log.e(TAG, "自动加载配置失败: ${e.message}", e)
             }
         }
         
@@ -324,7 +324,7 @@ class MonitorService private constructor(
         client: com.youyou.monitor.infra.network.WebDavClient
     ) = withContext(Dispatchers.IO) {
         try {
-            Log.i(TAG, "Using fastest WebDAV server: ${server.url}")
+            Log.i(TAG, "正在使用最快的WebDAV服务器: ${server.url}")
             
             // 关闭旧客户端（加锁防止并发）
             val oldClient = synchronized(webDavClientLock) {
@@ -341,14 +341,14 @@ class MonitorService private constructor(
             
             // 同步模板
             templateRepository.syncFromRemote().onSuccess {
-                Log.i(TAG, "Templates synced: $it templates")
+                Log.i(TAG, "模板已同步: $it 个模板")
             }.onFailure {
-                Log.w(TAG, "Template sync failed: ${it.message}")
+                Log.w(TAG, "模板同步失败: ${it.message}")
             }
             
-            Log.i(TAG, "WebDAV configured with fastest server")
+            Log.i(TAG, "WebDAV已配置最快服务器")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to configure WebDAV: ${e.message}", e)
+            Log.e(TAG, "配置WebDAV失败: ${e.message}", e)
         }
     }
 
@@ -362,23 +362,23 @@ class MonitorService private constructor(
      */
     private suspend fun autoLoadConfiguration() = withContext(Dispatchers.IO) {
         try {
-            Log.i(TAG, "=== autoLoadConfiguration START ===")
+            Log.i(TAG, "=== autoLoadConfiguration 开始 ===")
             
             // 尝试从远程同步配置（会自动测试所有服务器并选择最快的）
             val syncResult = configRepository.syncFromRemote()
             
             if (syncResult.isSuccess) {
-                Log.i(TAG, "Remote config synced, WebDAV auto-configured via callback")
+                Log.i(TAG, "远程配置已同步，WebDAV通过回调自动配置")
                 // syncFromRemote 成功后会自动触发回调，无需手动配置
                 return@withContext
             }
             
             // 远程同步失败，使用本地配置降级
-            Log.w(TAG, "Remote sync failed: ${syncResult.exceptionOrNull()?.message}, trying local config")
+            Log.w(TAG, "远程同步失败: ${syncResult.exceptionOrNull()?.message}，尝试本地配置")
             
             val config = configRepository.getCurrentConfig()
             if (config.webdavServers.isEmpty()) {
-                Log.w(TAG, "No WebDAV servers configured")
+                Log.w(TAG, "未配置WebDAV服务器")
                 return@withContext
             }
             
@@ -390,24 +390,24 @@ class MonitorService private constructor(
                 try {
                     client = WebDavClient.fromServer(server, Companion.deviceIdProvider)
                     
-                    Log.d(TAG, "Testing fallback server: ${server.url}")
+                    Log.d(TAG, "正在测试降级服务器: ${server.url}")
                     if (client.testConnection()) {
-                        Log.i(TAG, "Configuring with fallback server: ${server.url}")
+                        Log.i(TAG, "正在配置降级服务器: ${server.url}")
                         configureWebDavDirect(server, client)
                         return@withContext
                     } else {
-                        Log.w(TAG, "Fallback server ${server.url} not available")
+                        Log.w(TAG, "降级服务器 ${server.url} 不可用")
                         client.close()  // 测试失败，关闭客户端
                     }
                 } catch (e: Exception) {
-                    Log.w(TAG, "Failed to test fallback server ${server.url}: ${e.message}")
+                    Log.w(TAG, "测试降级服务器失败 ${server.url}: ${e.message}")
                     client?.close()  // 异常时关闭客户端
                 }
             }
             
-            Log.w(TAG, "All fallback servers failed")
+            Log.w(TAG, "所有降级服务器都失败")
         } catch (e: Exception) {
-            Log.e(TAG, "autoLoadConfiguration failed: ${e.message}", e)
+            Log.e(TAG, "autoLoadConfiguration失败: ${e.message}", e)
         }
     }
 
@@ -417,11 +417,11 @@ class MonitorService private constructor(
      */
     private suspend fun reconfigureWebDavForNetwork() = withContext(Dispatchers.IO) {
         try {
-            Log.i(TAG, "=== reconfigureWebDavForNetwork START ===")
+            Log.i(TAG, "=== reconfigureWebDavForNetwork 开始 ===")
             
             val config = configRepository.getCurrentConfig()
             if (config.webdavServers.isEmpty()) {
-                Log.d(TAG, "No WebDAV servers configured, skipping reconfiguration")
+                Log.d(TAG, "未配置WebDAV服务器，跳过重新配置")
                 return@withContext
             }
             
@@ -433,7 +433,7 @@ class MonitorService private constructor(
             val isWifi = capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
             val isCellular = capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true
             
-            Log.i(TAG, "Current network - WiFi: $isWifi, Cellular: $isCellular")
+            Log.i(TAG, "当前网络 - WiFi: $isWifi, 移动数据: $isCellular")
             
             // 测试所有服务器，选择最快的可用服务器
             var fastestServer: com.youyou.monitor.core.domain.model.WebDavServer? = null
@@ -457,26 +457,26 @@ class MonitorService private constructor(
                         fastestClient?.close() // 关闭之前的客户端
                         fastestClient = client
                         client = null // 防止被关闭
-                        Log.d(TAG, "Found faster server: ${server.url} (${responseTime}ms)")
+                        Log.d(TAG, "发现更快的服务器: ${server.url} (${responseTime}ms)")
                     } else {
-                        Log.d(TAG, "Server ${server.url} ${if (isAvailable) "available (${responseTime}ms)" else "unavailable"}")
+                        Log.d(TAG, "服务器 ${server.url} ${if (isAvailable) "可用 (${responseTime}ms)" else "不可用"}")
                     }
                 } catch (e: Exception) {
-                    Log.w(TAG, "Failed to test server ${server.url}: ${e.message}")
+                    Log.w(TAG, "测试服务器失败 ${server.url}: ${e.message}")
                 } finally {
                     client?.close() // 关闭测试用的客户端（除了最快的那个）
                 }
             }
             
             if (fastestServer != null && fastestClient != null) {
-                Log.i(TAG, "Reconfiguring with fastest server for current network: ${fastestServer.url} (${fastestResponseTime}ms)")
+                Log.i(TAG, "为当前网络重新配置最快服务器: ${fastestServer.url} (${fastestResponseTime}ms)")
                 configureWebDavDirect(fastestServer, fastestClient)
             } else {
-                Log.w(TAG, "No available WebDAV servers found for current network")
+                Log.w(TAG, "当前网络下未找到可用的WebDAV服务器")
             }
             
         } catch (e: Exception) {
-            Log.e(TAG, "reconfigureWebDavForNetwork failed: ${e.message}", e)
+            Log.e(TAG, "reconfigureWebDavForNetwork失败: ${e.message}", e)
         }
     }
     
@@ -487,7 +487,7 @@ class MonitorService private constructor(
         // 原子检查并设置（防止并发调用）
         synchronized(this) {
             if (!isRunning) {
-                Log.w(TAG, "Already stopped, skipping stop")
+                Log.w(TAG, "已在停止状态，跳过停止操作")
                 return
             }
             isRunning = false
@@ -518,7 +518,7 @@ class MonitorService private constructor(
         try {
             get<com.youyou.monitor.core.matcher.TemplateMatcherManager>().release()
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to release TemplateMatcherManager: ${e.message}")
+            Log.w(TAG, "释放TemplateMatcherManager失败: ${e.message}")
         }
         
         // 关闭日志系统
@@ -528,9 +528,9 @@ class MonitorService private constructor(
         try {
             val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
             connectivityManager.unregisterNetworkCallback(networkCallback)
-            Log.d(TAG, "Network change listener unregistered")
+            Log.d(TAG, "网络变化监听器已取消注册")
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to unregister network callback: ${e.message}")
+            Log.w(TAG, "取消注册网络回调失败: ${e.message}")
         }
     }
 

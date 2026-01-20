@@ -53,7 +53,7 @@ class TemplateRepositoryImpl(
                     newConfig.rootDir != oldConfig.rootDir ||
                     newConfig.templateDir != oldConfig.templateDir ||
                     newConfig.matcherType != oldConfig.matcherType) {
-                    Log.i(TAG, "Template path or matcher changed, migrating...")
+                    Log.i(TAG, "模板路径或匹配器已更改，正在迁移...")
                     
                     // 异步迁移模板
                     migrateTemplatesAsync(oldConfig, newConfig)
@@ -72,11 +72,11 @@ class TemplateRepositoryImpl(
                         }
                     } ?: "Templates"
                     remoteTemplateDir = "$baseRemoteDir/${newConfig.matcherType}"
-                    Log.d(TAG, "Updated remoteTemplateDir due to matcherType change: $remoteTemplateDir")
+                    Log.d(TAG, "由于匹配器类型更改，已更新remoteTemplateDir: $remoteTemplateDir")
                     
                     // 异步重新下载模板
                     scope.launch(Dispatchers.IO) {
-                        Log.i(TAG, "Matcher type changed, syncing templates from new remote directory...")
+                        Log.i(TAG, "匹配器类型已更改，正在从新的远程目录同步模板...")
                         syncFromRemote()
                     }
                 }
@@ -94,7 +94,7 @@ class TemplateRepositoryImpl(
             if (ext.exists() && ext.canWrite()) {
                 ext
             } else {
-                Log.w(TAG, "External storage not available, using internal")
+                Log.w(TAG, "外部存储不可用，使用内部存储")
                 File(context.filesDir, config.rootDir)
             }
         } else {
@@ -120,9 +120,9 @@ class TemplateRepositoryImpl(
         try {
             val file = File(templateDir, name)
             file.writeBytes(data)
-            Log.d(TAG, "Template saved: $name (${data.size} bytes)")
+            Log.d(TAG, "模板已保存: $name (${data.size} bytes)")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to save template: $name - ${e.message}", e)
+            Log.e(TAG, "保存模板失败: $name - ${e.message}", e)
         }
     }
     
@@ -130,20 +130,20 @@ class TemplateRepositoryImpl(
         try {
             val client = webdavClient
             if (client == null) {
-                Log.w(TAG, "WebDAV client not configured")
+                Log.w(TAG, "WebDAV客户端未配置")
                 return@withContext Result.failure(Exception("WebDAV client not configured"))
             }
             
-            Log.d(TAG, "Syncing templates from remote: $remoteTemplateDir")
+            Log.d(TAG, "正在从远程同步模板: $remoteTemplateDir")
             
             // 1. 列出远程模板
             val remoteFiles = client.listDirectory(remoteTemplateDir)
             if (remoteFiles.isEmpty()) {
-                Log.w(TAG, "No remote templates found")
+                Log.w(TAG, "未找到远程模板")
                 return@withContext Result.success(0)
             }
             
-            Log.d(TAG, "Found ${remoteFiles.size} remote templates")
+            Log.d(TAG, "发现 ${remoteFiles.size} 个远程模板")
             
             // 2. 清理本地模板目录（只保留远程存在的模板）
             try {
@@ -158,57 +158,57 @@ class TemplateRepositoryImpl(
                     val filesToDelete = localFiles.filter { !remoteFileNames.contains(it.name) }
                     
                     if (filesToDelete.isNotEmpty()) {
-                        Log.d(TAG, "Cleaning up ${filesToDelete.size} obsolete local templates")
+                        Log.d(TAG, "正在清理 ${filesToDelete.size} 个过时的本地模板")
                         filesToDelete.forEach { file ->
                             try {
                                 if (file.delete()) {
-                                    Log.d(TAG, "Deleted obsolete template: ${file.name}")
+                                    Log.d(TAG, "已删除过时的模板: ${file.name}")
                                 } else {
-                                    Log.w(TAG, "Failed to delete obsolete template: ${file.name}")
+                                    Log.w(TAG, "删除过时的模板失败: ${file.name}")
                                 }
                             } catch (e: Exception) {
-                                Log.w(TAG, "Error deleting obsolete template ${file.name}: ${e.message}")
+                                Log.w(TAG, "删除过时的模板出错 ${file.name}: ${e.message}")
                             }
                         }
                     }
                 }
             } catch (e: Exception) {
-                Log.w(TAG, "Error cleaning up local templates: ${e.message}")
+                Log.w(TAG, "清理本地模板出错: ${e.message}")
             }
             
             // 3. 下载并保存模板
             var syncCount = 0
             for (fileName in remoteFiles) {
                 try {
-                    Log.d(TAG, "Downloading template: $fileName from $remoteTemplateDir")
+                    Log.d(TAG, "正在下载模板: $fileName 从 $remoteTemplateDir")
                     val data = client.downloadFile(remoteTemplateDir, fileName)
                     if (data.isNotEmpty()) {
                         save(fileName, data)
                         syncCount++
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed to download template: $fileName - ${e.message}")
+                    Log.e(TAG, "下载模板失败: $fileName - ${e.message}")
                 }
             }
             
-            Log.i(TAG, "Template sync completed: $syncCount/${remoteFiles.size} synced")
+            Log.i(TAG, "模板同步完成: $syncCount/${remoteFiles.size} 已同步")
             
             // 3. 重新加载模板到matcher
             if (syncCount > 0) {
-                Log.d(TAG, "Reloading templates into matcher...")
+                Log.d(TAG, "正在重新加载模板到匹配器...")
                 notifyTemplatesUpdated()
             }
             
             Result.success(syncCount)
         } catch (e: Exception) {
-            Log.e(TAG, "Template sync failed: ${e.message}", e)
+            Log.e(TAG, "模板同步失败: ${e.message}", e)
             Result.failure(e)
         }
     }
     
     override fun notifyTemplatesUpdated() {
         try {
-            Log.d(TAG, "Notifying template update...")
+            Log.d(TAG, "正在通知模板更新...")
             scope.launch(Dispatchers.IO) {
                 matcherManager.getMatcher().reloadTemplates()
             }
