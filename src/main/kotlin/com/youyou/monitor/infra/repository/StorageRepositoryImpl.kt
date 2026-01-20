@@ -54,7 +54,7 @@ class StorageRepositoryImpl(
                 val oldConfig = currentConfig
                 if (newConfig.preferExternalStorage != oldConfig.preferExternalStorage ||
                     newConfig.rootDir != oldConfig.rootDir) {
-                    Log.i(TAG, "Storage path changed: preferExternal=${newConfig.preferExternalStorage}, root=${newConfig.rootDir}")
+                    Log.i(TAG, "存储路径已更改：优先外部存储=${newConfig.preferExternalStorage}, 根目录=${newConfig.rootDir}")
                     
                     // 异步迁移文件
                     migrateStorageAsync(oldConfig, newConfig)
@@ -74,7 +74,7 @@ class StorageRepositoryImpl(
             if (ext.exists() && ext.canWrite()) {
                 ext
             } else {
-                Log.w(TAG, "External storage not available, using internal")
+                Log.w(TAG, "外部存储不可用，使用内部存储")
                 File(context.filesDir, config.rootDir)
             }
         } else {
@@ -119,10 +119,10 @@ class StorageRepositoryImpl(
             // 保存文件
             file.writeBytes(data)
             
-            Log.d(TAG, "Screenshot saved: ${file.name} (${data.size / 1024}KB)")
+            Log.d(TAG, "截图已保存：${file.name} (${data.size / 1024}KB)")
             Result.success(file.absolutePath)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to save screenshot: ${e.message}", e)
+            Log.e(TAG, "保存截图失败：${e.message}", e)
             Result.failure(e)
         }
     }
@@ -148,10 +148,10 @@ class StorageRepositoryImpl(
                 bitmap.compress(Bitmap.CompressFormat.PNG, 90, out)
             }
             
-            Log.d(TAG, "Screenshot saved: ${file.name}")
+            Log.d(TAG, "截图已保存：${file.name}")
             Result.success(file.absolutePath)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to save screenshot: ${e.message}", e)
+            Log.e(TAG, "保存截图失败：${e.message}", e)
             Result.failure(e)
         }
     }
@@ -161,14 +161,14 @@ class StorageRepositoryImpl(
             val size = calculateDirectorySize(screenshotBaseDir) + calculateDirectorySize(videoBaseDir)
             Result.success(size)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to get total size: ${e.message}", e)
+            Log.e(TAG, "获取总大小失败：${e.message}", e)
             Result.failure(e)
         }
     }
     
     override suspend fun deleteOldestFiles(bytes: Long): Result<Int> = withContext(Dispatchers.IO) {
         try {
-            Log.d(TAG, "Cleaning storage: target=${bytes / 1024 / 1024}MB")
+            Log.d(TAG, "清理存储：目标=${bytes / 1024 / 1024}MB")
             
             // 获取所有文件并按修改时间排序
             val allFiles = (getAllFiles(screenshotBaseDir) + getAllFiles(videoBaseDir))
@@ -187,7 +187,7 @@ class StorageRepositoryImpl(
                         count++
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed to delete file: ${file.name}")
+                    Log.e(TAG, "删除文件失败：${file.name}")
                 }
             }
             
@@ -195,10 +195,10 @@ class StorageRepositoryImpl(
             cleanEmptyDirectories(screenshotBaseDir)
             cleanEmptyDirectories(videoBaseDir)
             
-            Log.i(TAG, "Storage cleaned: $count files, ${deleted / 1024 / 1024}MB freed")
+            Log.i(TAG, "存储已清理：$count 个文件，释放了 ${deleted / 1024 / 1024}MB")
             Result.success(count)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to clean storage: ${e.message}", e)
+            Log.e(TAG, "清理存储失败：${e.message}", e)
             Result.failure(e)
         }
     }
@@ -208,7 +208,7 @@ class StorageRepositoryImpl(
             val files = getAllFiles(screenshotBaseDir)
             Result.success(files)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to list screenshots: ${e.message}", e)
+            Log.e(TAG, "列出截图失败：${e.message}", e)
             Result.failure(e)
         }
     }
@@ -218,7 +218,7 @@ class StorageRepositoryImpl(
             val files = getAllFiles(videoBaseDir)
             Result.success(files)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to list videos: ${e.message}", e)
+            Log.e(TAG, "列出视频失败：${e.message}", e)
             Result.failure(e)
         }
     }
@@ -227,7 +227,7 @@ class StorageRepositoryImpl(
         try {
             (getAllFiles(screenshotBaseDir) + getAllFiles(videoBaseDir)).map { it.absolutePath }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to get pending upload files: ${e.message}", e)
+            Log.e(TAG, "获取待上传文件失败：${e.message}", e)
             emptyList()
         }
     }
@@ -291,7 +291,7 @@ class StorageRepositoryImpl(
                 // 如果目录为空，删除它
                 if (file.listFiles()?.isEmpty() == true) {
                     file.delete()
-                    Log.d(TAG, "Deleted empty directory: ${file.name}")
+                    Log.d(TAG, "删除了空目录：${file.name}")
                 }
             }
         }
@@ -309,7 +309,7 @@ class StorageRepositoryImpl(
      */
     private fun migrateStorageAsync(oldConfig: MonitorConfig, newConfig: MonitorConfig) {
         if (isMigrating) {
-            Log.w(TAG, "Migration already in progress, skipping")
+            Log.w(TAG, "迁移已在进行中，跳过")
             return
         }
         
@@ -318,7 +318,7 @@ class StorageRepositoryImpl(
                 isMigrating = true
                 migrateStorage(oldConfig, newConfig)
             } catch (e: Exception) {
-                Log.e(TAG, "Migration failed: ${e.message}", e)
+                Log.e(TAG, "迁移失败：${e.message}", e)
             } finally {
                 isMigrating = false
             }
@@ -329,7 +329,7 @@ class StorageRepositoryImpl(
      * 迁移存储文件
      */
     private suspend fun migrateStorage(oldConfig: MonitorConfig, newConfig: MonitorConfig) = withContext(Dispatchers.IO) {
-        Log.i(TAG, "Starting storage migration...")
+        Log.i(TAG, "开始存储迁移...")
         
         // 计算旧路径
         val oldBaseDir = if (oldConfig.preferExternalStorage) {
@@ -348,7 +348,7 @@ class StorageRepositoryImpl(
         
         // 检查是否需要迁移
         if (oldScreenshotDir.absolutePath == newScreenshotDir.absolutePath) {
-            Log.d(TAG, "Screenshot paths are the same, no migration needed")
+            Log.d(TAG, "截图路径相同，无需迁移")
             return@withContext
         }
         
@@ -357,7 +357,7 @@ class StorageRepositoryImpl(
         
         // 迁移截图
         if (oldScreenshotDir.exists()) {
-            Log.d(TAG, "Migrating screenshots from ${oldScreenshotDir.absolutePath}")
+            Log.d(TAG, "从 ${oldScreenshotDir.absolutePath} 迁移截图")
             val (moved, failed) = migrateDirectory(oldScreenshotDir, newScreenshotDir)
             totalMoved += moved
             totalFailed += failed
@@ -365,13 +365,13 @@ class StorageRepositoryImpl(
         
         // 迁移视频
         if (oldVideoDir.exists()) {
-            Log.d(TAG, "Migrating videos from ${oldVideoDir.absolutePath}")
+            Log.d(TAG, "从 ${oldVideoDir.absolutePath} 迁移视频")
             val (moved, failed) = migrateDirectory(oldVideoDir, newVideoDir)
             totalMoved += moved
             totalFailed += failed
         }
         
-        Log.i(TAG, "Migration completed: moved=$totalMoved, failed=$totalFailed")
+        Log.i(TAG, "迁移完成：移动=$totalMoved, 失败=$totalFailed")
         
         // 清理旧目录
         if (totalFailed == 0) {
@@ -412,10 +412,10 @@ class StorageRepositoryImpl(
                     // 如果目标已存在且大小相同，删除源文件
                     if (targetFile.exists() && targetFile.length() == file.length()) {
                         file.delete()
-                        Log.d(TAG, "Deleted duplicate: ${file.name}")
+                        Log.d(TAG, "删除了重复文件：${file.name}")
                     } else if (file.renameTo(targetFile)) {
                         movedCount++
-                        Log.d(TAG, "Moved: ${file.name}")
+                        Log.d(TAG, "已移动：${file.name}")
                     } else {
                         // 尝试复制+删除
                         file.inputStream().use { input ->
@@ -425,16 +425,16 @@ class StorageRepositoryImpl(
                         }
                         if (file.delete()) {
                             movedCount++
-                            Log.d(TAG, "Copied and deleted: ${file.name}")
+                            Log.d(TAG, "已复制并删除：${file.name}")
                         } else {
                             failedCount++
-                            Log.w(TAG, "Failed to delete after copy: ${file.name}")
+                            Log.w(TAG, "复制后删除失败：${file.name}")
                         }
                     }
                 }
             } catch (e: Exception) {
                 failedCount++
-                Log.e(TAG, "Failed to migrate ${file.name}: ${e.message}")
+                Log.e(TAG, "迁移 ${file.name} 失败：${e.message}")
             }
         }
         
@@ -454,11 +454,11 @@ class StorageRepositoryImpl(
             // 如果根目录也空了，删除它
             if (oldBaseDir.listFiles()?.isEmpty() == true) {
                 if (oldBaseDir.delete()) {
-                    Log.i(TAG, "Cleaned up old directory: ${oldBaseDir.absolutePath}")
+                    Log.i(TAG, "清理了旧目录：${oldBaseDir.absolutePath}")
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to cleanup old directory: ${e.message}")
+            Log.e(TAG, "清理旧目录失败：${e.message}")
         }
     }
 }

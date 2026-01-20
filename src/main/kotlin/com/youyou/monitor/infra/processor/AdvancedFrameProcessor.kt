@@ -53,10 +53,10 @@ class AdvancedFrameProcessor(
             try {
                 configRepository.getConfigFlow().collect { config ->
                     cachedConfig = config
-                    Log.d(TAG, "Config updated: detectPerSecond=${config.detectPerSecond}")
+                    Log.d(TAG, "配置已更新：每秒检测次数=${config.detectPerSecond}")
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error collecting config: ${e.message}", e)
+                Log.e(TAG, "收集配置时出错：${e.message}", e)
             }
         }
     }
@@ -93,7 +93,7 @@ class AdvancedFrameProcessor(
         // 1. 队列堆积检查（最优先）
         if (isProcessing.get()) {
             if (count % 50 == 0L) {
-                Log.d(TAG, "[Skip] Previous frame still processing")
+                Log.d(TAG, "[跳过] 上一帧仍在处理中")
             }
             return@withContext false
         }
@@ -102,7 +102,7 @@ class AdvancedFrameProcessor(
         
         // 2. 定期统计日志
         if (now - lastLogTime.get() > LOG_INTERVAL) {
-            Log.i(TAG, "[Stats] Total calls: $count, running: $running, isProcessing: ${isProcessing.get()}")
+            Log.i(TAG, "[统计] 总调用次数: $count, 运行中: $running, 正在处理: ${isProcessing.get()}")
             lastLogTime.set(now)
         }
         
@@ -111,13 +111,13 @@ class AdvancedFrameProcessor(
         val interval = if (config.detectPerSecond > 0) 1000 / config.detectPerSecond else 500
         if (now - lastDetectTime.get() < interval) {
             if (count % 100 == 0L) {
-                Log.d(TAG, "[Skip] Rate limit: ${now - lastDetectTime.get()}ms < ${interval}ms")
+                Log.d(TAG, "[跳过] 频率限制: ${now - lastDetectTime.get()}ms < ${interval}ms")
             }
             return@withContext false
         }
         
         if (!running) {
-            Log.w(TAG, "[Skip] Processor not running")
+            Log.w(TAG, "[跳过] 处理器未运行")
             return@withContext false
         }
         
@@ -126,19 +126,19 @@ class AdvancedFrameProcessor(
         // 4. 快速帧签名计算（采样9个点）
         val signature = calculateFrameSignature(frame)
         if (signature == null) {
-            Log.e(TAG, "[Skip] Signature calculation failed")
+            Log.e(TAG, "[跳过] 签名计算失败")
             return@withContext false
         }
         
         // 5. 帧去重
         if (signature == lastFrameSignature.get()) {
             if (count % 50 == 0L) {
-                Log.d(TAG, "[Skip] Duplicate frame (signature: $signature)")
+                Log.d(TAG, "[跳过] 重复帧 (签名: $signature)")
             }
             return@withContext false
         }
         
-        Log.d(TAG, "[Process] Frame accepted: ${frame.width}x${frame.height}, signature=$signature")
+        Log.d(TAG, "[处理] 帧已接受: ${frame.width}x${frame.height}, 签名=$signature")
         
         // 6. 更新签名并异步处理
         lastFrameSignature.set(signature)
@@ -186,7 +186,7 @@ class AdvancedFrameProcessor(
             }
             sig
         } catch (e: Exception) {
-            Log.e(TAG, "Signature calculation error: ${e.message}")
+            Log.e(TAG, "签名计算错误：${e.message}")
             null
         }
     }
@@ -220,7 +220,7 @@ class AdvancedFrameProcessor(
             
             // 图像质量检测
             if (!isValidImage(processedMat)) {
-                Log.w(TAG, "Frame is blank/monochrome, skipping")
+                Log.w(TAG, "帧为空白/单色，跳过")
                 return
             }
             
@@ -228,13 +228,13 @@ class AdvancedFrameProcessor(
             if (now - lastForceSaveTime.get() > FORCE_SAVE_INTERVAL) {
                 saveBitmap(bmp, "forced")
                 lastForceSaveTime.set(now)
-                Log.i(TAG, "Force saved valid screenshot")
+                Log.i(TAG, "强制保存有效截图")
             }
             
             // 匹配冷却期检查
             val timeSinceLastMatch = now - lastMatchTime.get()
             if (lastMatchTime.get() > 0 && timeSinceLastMatch < config.matchCooldownMs) {
-                Log.d(TAG, "Skip matching: in cooldown (${timeSinceLastMatch}ms / ${config.matchCooldownMs}ms)")
+                Log.d(TAG, "跳过匹配：在冷却期 (${timeSinceLastMatch}ms / ${config.matchCooldownMs}ms)")
                 return
             }
             
@@ -243,28 +243,28 @@ class AdvancedFrameProcessor(
             if (matchResult != null) {
                 saveBitmap(bmp, matchResult.templateName)
                 lastMatchTime.set(now)
-                Log.i(TAG, "Match saved: ${matchResult.templateName}")
+                Log.i(TAG, "匹配已保存：${matchResult.templateName}")
             }
         } catch (e: Exception) {
-            Log.e(TAG, "processFrame error: ${e.message}")
+            Log.e(TAG, "processFrame 错误：${e.message}")
         } finally {
             // 确保资源被释放（即使 release 抛异常也要继续）
             try {
                 resized?.release()
             } catch (e: Exception) {
-                Log.e(TAG, "Error releasing resized mat: ${e.message}")
+                Log.e(TAG, "释放调整大小的 mat 时出错：${e.message}")
             }
             
             try {
                 mat?.release()
             } catch (e: Exception) {
-                Log.e(TAG, "Error releasing mat: ${e.message}")
+                Log.e(TAG, "释放 mat 时出错：${e.message}")
             }
             
             try {
                 bmp?.recycle()
             } catch (e: Exception) {
-                Log.e(TAG, "Error recycling bitmap: ${e.message}")
+                Log.e(TAG, "回收 bitmap 时出错：${e.message}")
             }
         }
     }
@@ -294,11 +294,11 @@ class AdvancedFrameProcessor(
             val isValid = stdVal >= MIN_STDDEV
             
             if (!isValid) {
-                Log.d(TAG, "Invalid frame: stdDev=$stdVal (too low)")
+                Log.d(TAG, "无效帧：标准差=$stdVal (太低)")
             }
             isValid
         } catch (e: Exception) {
-                Log.e(TAG, "isValidImage error: ${e.message}")
+                Log.e(TAG, "isValidImage 错误：${e.message}")
             false
         } finally {
             roi?.release()
@@ -319,12 +319,12 @@ class AdvancedFrameProcessor(
             // 使用 StorageRepository 保存
             val result = storageRepository.saveScreenshot(bmp, filename)
             result.onSuccess {
-                Log.i(TAG, "Saved: $filename")
+                Log.i(TAG, "已保存：$filename")
             }.onFailure {
-                Log.e(TAG, "Save failed: ${it.message}")
+                Log.e(TAG, "保存失败：${it.message}")
             }
         } catch (e: Exception) {
-            Log.e(TAG, "saveBitmap error: ${e.message}")
+            Log.e(TAG, "saveBitmap 错误：${e.message}")
         }
     }
     

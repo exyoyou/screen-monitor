@@ -137,7 +137,7 @@ class WebDavClient(
             Log.d(TAG, "连接测试成功")
             true
         } catch (e: Exception) {
-            Log.e(TAG, "连接测试失败: ${e.javaClass.simpleName}: ${e.message}")
+            Log.e(TAG, "连接测试失败：${e.javaClass.simpleName}：${e.message}")
             false
         }
     }
@@ -162,7 +162,7 @@ class WebDavClient(
             Log.d(TAG, "检测到大文件 (${file.length() / 1024 / 1024}MB)")
             // 检查网络类型：大文件只允许在WiFi下上传
             if (!isWifiConnected()) {
-                Log.e(TAG, "大文件上传失败: 未连接到WiFi")
+                Log.e(TAG, "大文件上传失败：未连接到WiFi")
                 return@withContext false
             }
         }
@@ -197,29 +197,29 @@ class WebDavClient(
                 val elapsedSeconds = (System.currentTimeMillis() - startTime) / 1000.0
                 val speedMBps = sizeMB / elapsedSeconds
                 
-                Log.d(TAG, "上传成功: $fileName (%.2fMB in %.1fs, %.1fMB/s)".format(sizeMB, elapsedSeconds, speedMBps))
+                Log.d(TAG, "上传成功：$fileName (%.2fMB in %.1fs, %.1fMB/s)".format(sizeMB, elapsedSeconds, speedMBps))
                 return@withContext true
             } catch (e: java.net.SocketTimeoutException) {
-                Log.e(TAG, "上传超时: $fileName (尝试 ${attempt + 1}/$actualMaxRetry)")
+                Log.e(TAG, "上传超时：$fileName (尝试 ${attempt + 1}/$actualMaxRetry)")
                 lastException = e
                 attempt++
                 if (attempt < actualMaxRetry) {
                     kotlinx.coroutines.delay(delayMillis)
                 }
             } catch (e: java.io.IOException) {
-                Log.e(TAG, "上传IO错误: $fileName - ${e.message}")
+                Log.e(TAG, "上传IO错误：$fileName - ${e.message}")
                 lastException = e
                 attempt++
                 if (attempt < actualMaxRetry) {
                     kotlinx.coroutines.delay(delayMillis)
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "上传错误: $fileName - ${e.javaClass.simpleName}: ${e.message}")
+                Log.e(TAG, "上传错误：$fileName - ${e.javaClass.simpleName}：${e.message}")
                 return@withContext false
             }
         }
         
-        Log.e(TAG, "上传在 $actualMaxRetry 次尝试后失败: $fileName")
+        Log.e(TAG, "上传在 $actualMaxRetry 次尝试后失败：$fileName")
         false
     }
 
@@ -242,10 +242,10 @@ class WebDavClient(
                 
                 Log.d(TAG, "正在尝试下载: $fullUrl")
                 val bytes = sardine.get(fullUrl).use { it.readBytes() }
-                Log.d(TAG, "已下载: $fileName (${bytes.size} bytes)")
+                Log.d(TAG, "已下载：$fileName (${bytes.size} bytes)")
                 return@withContext bytes
             } catch (e: Exception) {
-                Log.e(TAG, "下载错误: $fileName (尝试 ${attempt + 1}/$maxRetry) - ${e.javaClass.simpleName}: ${e.message}")
+                Log.e(TAG, "下载错误：$fileName (尝试 ${attempt + 1}/$maxRetry) - ${e.javaClass.simpleName}：${e.message}")
                 attempt++
                 if (attempt < maxRetry) {
                     kotlinx.coroutines.delay(DEFAULT_RETRY_DELAY_MS)
@@ -253,7 +253,7 @@ class WebDavClient(
             }
         }
         
-        Log.e(TAG, "下载在 $maxRetry 次尝试后失败: $fileName")
+        Log.e(TAG, "下载在 $maxRetry 次尝试后失败：$fileName")
         ByteArray(0)
     }
 

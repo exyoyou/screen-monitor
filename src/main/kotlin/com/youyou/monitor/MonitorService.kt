@@ -100,7 +100,7 @@ class MonitorService private constructor(
                             // 不要在 init 时调用 deviceIdProvider，避免过早触发 FFI.getMyId()
                             Log.i(TAG, "MonitorService初始化成功 (deviceIdProvider=${if (deviceIdProvider != null) "已提供" else "未提供"})")
                         } catch (e: Exception) {
-                            Log.e(TAG, "Initialization failed: ${e.message}", e)
+                            Log.e(TAG, "初始化失败：${e.message}", e)
                             throw e  // 重新抛出，确保调用方知道失败
                         }
                     }
@@ -211,7 +211,7 @@ class MonitorService private constructor(
                             Log.i(TAG, "由于网络变化，正在重新评估WebDAV配置")
                             reconfigureWebDavForNetwork()
                         } catch (e: Exception) {
-                            Log.e(TAG, "网络变化时重新配置WebDAV失败: ${e.message}", e)
+                            Log.e(TAG, "网络变化时重新配置WebDAV失败：${e.message}", e)
                         }
                     }
                 }
@@ -226,7 +226,7 @@ class MonitorService private constructor(
                     try {
                         reconfigureWebDavForNetwork()
                     } catch (e: Exception) {
-                        Log.w(TAG, "网络变化重新配置失败: ${e.message}")
+                        Log.w(TAG, "网络变化重新配置失败：${e.message}")
                     }
                 }
             }
@@ -255,7 +255,7 @@ class MonitorService private constructor(
                 return@setOnWebDavServersChanged
             }
             
-            Log.i(TAG, "WebDAV服务器已变化，自动重新配置最快服务器: ${fastestServer?.url}")
+            Log.i(TAG, "WebDAV服务器已变化，自动重新配置最快服务器：${fastestServer?.url}")
             try {
                 getScope().launch {
                     // 使用 ConfigRepository 选择的最快服务器
@@ -266,7 +266,7 @@ class MonitorService private constructor(
                     }
                 }
             } catch (e: Exception) {
-                Log.w(TAG, "启动WebDAV重新配置失败: ${e.message}")
+                Log.w(TAG, "启动WebDAV重新配置失败：${e.message}")
             }
         }
     }

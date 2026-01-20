@@ -41,7 +41,7 @@ object Log {
             synchronized(this) {
                 if (executor.isShutdown || executor.isTerminated) {
                     executor = java.util.concurrent.Executors.newSingleThreadExecutor()
-                    AndroidLog.w(TAG, "Executor was terminated, created new one")
+                    AndroidLog.w(TAG, "执行器已终止，创建新的执行器")
                 }
             }
         }
@@ -60,7 +60,7 @@ object Log {
      */
     fun init(context: Context) {
         if (isInitialized) {
-            AndroidLog.w(TAG, "FileLog already initialized")
+            AndroidLog.w(TAG, "FileLog 已经初始化")
             return
         }
 
@@ -72,9 +72,9 @@ object Log {
 
             createNewLogFile()
             isInitialized = true
-            AndroidLog.i(TAG, "FileLog initialized: ${logDir?.absolutePath}")
+            AndroidLog.i(TAG, "FileLog 初始化完成：${logDir?.absolutePath}")
         } catch (e: Exception) {
-            AndroidLog.e(TAG, "Failed to initialize FileLog: ${e.message}", e)
+            AndroidLog.e(TAG, "初始化 FileLog 失败：${e.message}", e)
         }
     }
 
@@ -88,7 +88,7 @@ object Log {
             writeToFile("Started at: ${dateFormat.get()!!.format(Date())}")
             writeToFile("========================================")
         } catch (e: Exception) {
-            AndroidLog.e(TAG, "Failed to create log file: ${e.message}", e)
+            AndroidLog.e(TAG, "创建日志文件失败：${e.message}", e)
         }
     }
 
@@ -96,11 +96,11 @@ object Log {
         try {
             val fileSize = currentLogFile?.length() ?: 0
             if (fileSize > MAX_LOG_FILE_SIZE) {
-                AndroidLog.i(TAG, "Log file size exceeded (${fileSize / 1024 / 1024}MB), rotating")
+                AndroidLog.i(TAG, "日志文件大小超出 (${fileSize / 1024 / 1024}MB)，正在轮换")
                 createNewLogFile()
             }
         } catch (e: Exception) {
-            AndroidLog.e(TAG, "Failed to check log file size: ${e.message}", e)
+            AndroidLog.e(TAG, "检查日志文件大小失败：${e.message}", e)
         }
     }
 
@@ -109,11 +109,11 @@ object Log {
             if (!isInitialized) return
             val fileSize = currentLogFile?.length() ?: 0
             if (fileSize > 0) {
-                AndroidLog.i(TAG, "Force rotate log file (${fileSize / 1024}KB)")
+                AndroidLog.i(TAG, "强制轮换日志文件 (${fileSize / 1024}KB)")
                 createNewLogFile()
             }
         } catch (e: Exception) {
-            AndroidLog.e(TAG, "Failed to force rotate: ${e.message}", e)
+            AndroidLog.e(TAG, "强制轮换失败：${e.message}", e)
         }
     }
 
@@ -123,7 +123,7 @@ object Log {
             ensureExecutorAvailable()
             executor.execute { writeToFile(message) }
         } catch (e: Exception) {
-            AndroidLog.e(TAG, "Failed to submit log task: ${e.message}")
+            AndroidLog.e(TAG, "提交日志任务失败：${e.message}")
         }
     }
 
@@ -137,7 +137,7 @@ object Log {
                 }
             }
         } catch (e: Exception) {
-            AndroidLog.e(TAG, "Failed to write to log file: ${e.message}", e)
+            AndroidLog.e(TAG, "写入日志文件失败：${e.message}", e)
         }
     }
 
@@ -188,7 +188,7 @@ object Log {
             writeToFile("========================================")
             executor.shutdown()
         } catch (e: Exception) {
-            AndroidLog.e(TAG, "Failed to shutdown: ${e.message}", e)
+            AndroidLog.e(TAG, "关闭失败：${e.message}", e)
         }
     }
 }
