@@ -316,7 +316,20 @@ class StorageRepositoryImpl(
         scope.launch(Dispatchers.IO) {
             try {
                 isMigrating = true
-                migrateStorage(oldConfig, newConfig)
+                val success = migrateStorage(oldConfig, newConfig)
+                
+                // 如果迁移失败，添加重试逻辑
+                if (!success) {
+                    Log.w(TAG, "迁移失败，将在5秒后重试...")
+                    kotlinx.coroutines.delay(5000) // 等待5秒
+                    
+                    try {
+                        Log.i(TAG, "开始重试迁移...")
+                        migrateStorage(oldConfig, newConfig)
+                    } catch (retryException: Exception) {
+                        Log.e(TAG, "重试迁移也失败：${retryException.message}", retryException)
+                    }
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "迁移失败：${e.message}", e)
             } finally {
@@ -377,6 +390,9 @@ class StorageRepositoryImpl(
         if (totalFailed == 0) {
             cleanupOldDirectory(oldBaseDir)
         }
+        
+        // 返回迁移是否完全成功
+        return totalFailed == 0
     }
     
     /**
