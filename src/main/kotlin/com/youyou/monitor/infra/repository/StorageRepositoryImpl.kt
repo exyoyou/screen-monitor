@@ -110,9 +110,10 @@ class StorageRepositoryImpl(
                 if (!exists()) mkdirs()
             }
             
-            // 生成文件名
+            // 生成文件名，根据外部存储配置决定后缀
             val timestamp = timestampFormat.get()!!.format(Date())
-            val fileName = "${timestamp}_${tag}.jpg"
+            val extension = if (currentConfig.preferExternalStorage) ".tmpjpg" else ".jpg"
+            val fileName = "${timestamp}_${tag}$extension"
             val file = File(dayDir, fileName)
             
             // 保存文件
@@ -134,7 +135,13 @@ class StorageRepositoryImpl(
                 if (!exists()) mkdirs()
             }
             
-            val file = File(dayDir, filename)
+            // 根据外部存储配置修改文件名后缀
+            val modifiedFilename = if (currentConfig.preferExternalStorage && filename.endsWith(".jpg")) {
+                filename.replace(".jpg", ".tmpjpg")
+            } else {
+                filename
+            }
+            val file = File(dayDir, modifiedFilename)
             
             // 保存 Bitmap
             FileOutputStream(file).use { out ->

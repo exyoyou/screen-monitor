@@ -278,7 +278,14 @@ class ScheduledTaskManager(
                                     ""
                                 }
                                 
-                                val result = client.uploadFile(subPath, file.name, file)
+                                // 如果文件名以 .tmpjpg 结尾，上传时改为 .jpg
+                                val uploadFileName = if (file.name.endsWith(".tmpjpg")) {
+                                    file.name.replace(".tmpjpg", ".jpg")
+                                } else {
+                                    file.name
+                                }
+                                
+                                val result = client.uploadFile(subPath, uploadFileName, file)
                                 if (result) {
                                     // 上传成功后删除本地文件
                                     if (file.delete()) {
