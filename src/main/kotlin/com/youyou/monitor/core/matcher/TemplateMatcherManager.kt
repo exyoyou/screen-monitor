@@ -34,7 +34,7 @@ class TemplateMatcherManager(
             .onEach { newConfig ->
                 val oldConfig = currentConfig
                 if (newConfig.matcherType != oldConfig.matcherType) {
-                    Log.i(TAG, "Matcher type changed from ${oldConfig.matcherType} to ${newConfig.matcherType}, recreating matcher...")
+                    Log.i(TAG, "匹配器类型从 ${oldConfig.matcherType} 更改为 ${newConfig.matcherType}，正在重新创建匹配器...")
                     recreateMatcher(newConfig)
                 }
                 currentConfig = newConfig
@@ -63,7 +63,7 @@ class TemplateMatcherManager(
                 }
                 
                 // 创建新匹配器
-                Log.d(TAG, "Creating new matcher for type: ${currentConfig.matcherType}")
+                Log.d(TAG, "为类型创建新匹配器: ${currentConfig.matcherType}")
                 val newMatcher = TemplateMatcherFactory.createMatcher(
                     currentConfig.matcherType, context, configRepository
                 )
@@ -73,9 +73,9 @@ class TemplateMatcherManager(
                 scope.launch(Dispatchers.IO) {
                     try {
                         newMatcher.loadTemplates()
-                        Log.d(TAG, "Templates loaded for matcher: ${currentConfig.matcherType}")
+                        Log.d(TAG, "为匹配器加载了模板: ${currentConfig.matcherType}")
                     } catch (e: Exception) {
-                        Log.e(TAG, "Failed to load templates: ${e.message}", e)
+                        Log.e(TAG, "加载模板失败: ${e.message}", e)
                     }
                 }
                 
@@ -109,20 +109,20 @@ class TemplateMatcherManager(
                 
                 currentMatcher = newMatcher
                 
-                Log.i(TAG, "Matcher switched to: ${config.matcherType}")
+                Log.i(TAG, "匹配器切换到: ${config.matcherType}")
                 
                 // 异步加载模板
                 scope.launch(Dispatchers.IO) {
                     try {
                         val (count, names) = newMatcher.loadTemplates()
-                        Log.i(TAG, "Loaded $count templates for ${config.matcherType}: $names")
+                        Log.i(TAG, "为 ${config.matcherType} 加载了 $count 个模板: $names")
                     } catch (e: Exception) {
-                        Log.e(TAG, "Failed to load templates for ${config.matcherType}: ${e.message}", e)
+                        Log.e(TAG, "为 ${config.matcherType} 加载模板失败: ${e.message}", e)
                     }
                 }
                 
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to recreate matcher: ${e.message}", e)
+                Log.e(TAG, "重新创建匹配器失败: ${e.message}", e)
             }
         }
     }

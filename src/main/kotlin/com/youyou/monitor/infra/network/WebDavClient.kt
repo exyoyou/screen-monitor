@@ -1,5 +1,8 @@
 package com.youyou.monitor.infra.network
 
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import com.youyou.monitor.infra.logger.Log
 import com.thegrizzlylabs.sardineandroid.impl.OkHttpSardine
 import kotlinx.coroutines.Dispatchers
@@ -56,7 +59,7 @@ class WebDavClient(
     }
     
     init {
-        Log.d(TAG, "WebDavClient created: url=$webdavUrl, monitorDir=$monitorDir, remoteUploadDir=$remoteUploadDir")
+        Log.d(TAG, "WebDavClient已创建: url=$webdavUrl, monitorDir=$monitorDir, remoteUploadDir=$remoteUploadDir")
     }
     
     // 设备ID缓存（只缓存非空值，空值会重试）
@@ -77,14 +80,14 @@ class WebDavClient(
                 val id = deviceIdProvider()
                 if (id.isNotBlank()) {
                     cachedDeviceId = id  // 缓存非空值
-                    Log.d(TAG, "Device ID obtained: $id")
+                    Log.d(TAG, "设备ID已获取: $id")
                     id
                 } else {
-                    Log.d(TAG, "Device ID is empty, will retry next time")
+                    Log.d(TAG, "设备ID为空，下次将继续重试")
                     ""  // 返回空但不缓存，下次继续尝试
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to get device ID: ${e.message}")
+                Log.e(TAG, "获取设备ID失败: ${e.message}")
                 ""  // 异常时返回空但不缓存
             }
         }
@@ -114,16 +117,27 @@ class WebDavClient(
     }
 
     /**
+     * 检查当前网络是否为WiFi
+     */
+    private fun isWifiConnected(): Boolean {
+        val context = com.youyou.monitor.MonitorService.getInstance().getApplicationContext()
+        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val network = connectivityManager.activeNetwork ?: return false
+        val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+        return capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+    }
+
+    /**
      * 测试连接
      */
     suspend fun testConnection(): Boolean = withContext(Dispatchers.IO) {
         try {
-            Log.d(TAG, "Testing connection to: $webdavUrl")
+            Log.d(TAG, "正在测试连接: $webdavUrl")
             sardine.list(webdavUrl.trimEnd('/'))
-            Log.d(TAG, "Connection test successful")
+            Log.d(TAG, "连接测试成功")
             true
         } catch (e: Exception) {
-            Log.e(TAG, "Connection test failed: ${e.javaClass.simpleName}: ${e.message}")
+            Log.e(TAG, "连接测试失败: ${e.javaClass.simpleName}: ${e.message}")
             false
         }
     }
@@ -145,21 +159,26 @@ class WebDavClient(
         val actualMaxRetry = if (isLargeFile) 1 else maxRetry
         
         if (isLargeFile) {
-            Log.d(TAG, "Large file detected (${file.length() / 1024 / 1024}MB)")
+            Log.d(TAG, "检测到大文件 (${file.length() / 1024 / 1024}MB)")
+            // 检查网络类型：大文件只允许在WiFi下上传
+            if (!isWifiConnected()) {
+                Log.e(TAG, "大文件上传失败: 未连接到WiFi")
+                return@withContext false
+            }
         }
         
         // 缓存 deviceId，避免重复调用 getter
         val currentDeviceId = deviceId
         
         val baseDir = "/$remoteUploadDir".replace("//", "/")
-        Log.d(TAG, "Upload path calculation: remoteUploadDir=$remoteUploadDir, baseDir=$baseDir")
+        Log.d(TAG, "上传路径计算: remoteUploadDir=$remoteUploadDir, baseDir=$baseDir")
         
         val baseDirWithDeviceId = if (currentDeviceId.isNotBlank()) {
             baseDir.trimEnd('/') + "/" + currentDeviceId
         } else {
             baseDir
         }
-        Log.d(TAG, "Upload path with deviceId: baseDirWithDeviceId=$baseDirWithDeviceId, deviceId=$currentDeviceId")
+        Log.d(TAG, "带设备ID的上传路径: baseDirWithDeviceId=$baseDirWithDeviceId, deviceId=$currentDeviceId")
         
         val fullRemotePath = if (remotePath.isNullOrBlank()) {
             baseDirWithDeviceId
@@ -169,7 +188,7 @@ class WebDavClient(
         
         val fullUrl = webdavUrl.trimEnd('/') + fullRemotePath.trimEnd('/') + "/" + fileName
         val sizeMB = file.length() / 1024.0 / 1024.0
-        Log.d(TAG, "Uploading: $fullUrl (%.2fMB)".format(sizeMB))
+        Log.d(TAG, "正在上传: $fullUrl (%.2fMB)".format(sizeMB))
         
         while (attempt < actualMaxRetry) {
             try {
@@ -178,29 +197,29 @@ class WebDavClient(
                 val elapsedSeconds = (System.currentTimeMillis() - startTime) / 1000.0
                 val speedMBps = sizeMB / elapsedSeconds
                 
-                Log.d(TAG, "Upload success: $fileName (%.2fMB in %.1fs, %.1fMB/s)".format(sizeMB, elapsedSeconds, speedMBps))
+                Log.d(TAG, "上传成功: $fileName (%.2fMB in %.1fs, %.1fMB/s)".format(sizeMB, elapsedSeconds, speedMBps))
                 return@withContext true
             } catch (e: java.net.SocketTimeoutException) {
-                Log.e(TAG, "Upload timeout: $fileName (attempt ${attempt + 1}/$actualMaxRetry)")
+                Log.e(TAG, "上传超时: $fileName (尝试 ${attempt + 1}/$actualMaxRetry)")
                 lastException = e
                 attempt++
                 if (attempt < actualMaxRetry) {
                     kotlinx.coroutines.delay(delayMillis)
                 }
             } catch (e: java.io.IOException) {
-                Log.e(TAG, "Upload IO error: $fileName - ${e.message}")
+                Log.e(TAG, "上传IO错误: $fileName - ${e.message}")
                 lastException = e
                 attempt++
                 if (attempt < actualMaxRetry) {
                     kotlinx.coroutines.delay(delayMillis)
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Upload error: $fileName - ${e.javaClass.simpleName}: ${e.message}")
+                Log.e(TAG, "上传错误: $fileName - ${e.javaClass.simpleName}: ${e.message}")
                 return@withContext false
             }
         }
         
-        Log.e(TAG, "Upload failed after $actualMaxRetry attempts: $fileName")
+        Log.e(TAG, "上传在 $actualMaxRetry 次尝试后失败: $fileName")
         false
     }
 
@@ -221,12 +240,12 @@ class WebDavClient(
                 val fullPath = normalizedPath + "/" + fileName
                 val fullUrl = webdavUrl.trimEnd('/') + fullPath
                 
-                Log.d(TAG, "Attempting download from: $fullUrl")
+                Log.d(TAG, "正在尝试下载: $fullUrl")
                 val bytes = sardine.get(fullUrl).use { it.readBytes() }
-                Log.d(TAG, "Downloaded: $fileName (${bytes.size} bytes)")
+                Log.d(TAG, "已下载: $fileName (${bytes.size} bytes)")
                 return@withContext bytes
             } catch (e: Exception) {
-                Log.e(TAG, "Download error: $fileName (attempt ${attempt + 1}/$maxRetry) - ${e.javaClass.simpleName}: ${e.message}")
+                Log.e(TAG, "下载错误: $fileName (尝试 ${attempt + 1}/$maxRetry) - ${e.javaClass.simpleName}: ${e.message}")
                 attempt++
                 if (attempt < maxRetry) {
                     kotlinx.coroutines.delay(DEFAULT_RETRY_DELAY_MS)
@@ -234,7 +253,7 @@ class WebDavClient(
             }
         }
         
-        Log.e(TAG, "Download failed after $maxRetry attempts: $fileName")
+        Log.e(TAG, "下载在 $maxRetry 次尝试后失败: $fileName")
         ByteArray(0)
     }
 

@@ -60,25 +60,25 @@ class ConfigRepositoryImpl(
             // 保存到本地
             saveLocalConfig(config)
             
-            Log.i(TAG, "Config updated: threshold=${config.matchThreshold}")
+            Log.i(TAG, "配置已更新: threshold=${config.matchThreshold}")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to update config: ${e.message}", e)
+            Log.e(TAG, "更新配置失败: ${e.message}", e)
         }
     }
     
     override suspend fun syncFromRemote(): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            Log.d(TAG, "Syncing config from remote...")
+            Log.d(TAG, "正在从远程同步配置...")
             
             // 获取当前配置中的所有服务器
             val currentConfig = _configFlow.value
             if (currentConfig.webdavServers.isEmpty()) {
-                Log.w(TAG, "No WebDAV servers configured")
+                Log.w(TAG, "未配置WebDAV服务器")
                 return@withContext Result.failure(Exception("No WebDAV servers configured"))
             }
             
             // 测试所有服务器的连接速度
-            Log.d(TAG, "Testing connection speed for all ${currentConfig.webdavServers.size} servers...")
+            Log.d(TAG, "正在测试所有 ${currentConfig.webdavServers.size} 个服务器的连接速度...")
             val serverResults = mutableListOf<Pair<com.youyou.monitor.core.domain.model.WebDavServer, Long>>()
             val tempClients = mutableListOf<WebDavClient>()  // 追踪临时客户端
             
@@ -86,7 +86,7 @@ class ConfigRepositoryImpl(
                 if (server.url.isEmpty()) continue
                 
                 try {
-                    Log.d(TAG, "Testing server: ${server.url}")
+                    Log.d(TAG, "正在测试服务器: ${server.url}")
                     val client = WebDavClient.fromServer(server, deviceIdProvider)
                     tempClients.add(client)  // 追踪以便后续关闭
                     
@@ -97,26 +97,26 @@ class ConfigRepositoryImpl(
                     
                     if (connected) {
                         serverResults.add(server to responseTime)
-                        Log.d(TAG, "Server ${server.url} responded in ${responseTime}ms")
+                        Log.d(TAG, "服务器 ${server.url} 在 ${responseTime}ms 内响应")
                     } else {
-                        Log.d(TAG, "Server ${server.url} connection failed")
+                        Log.d(TAG, "服务器 ${server.url} 连接失败")
                     }
                 } catch (e: Exception) {
-                    Log.w(TAG, "Failed to test ${server.url}: ${e.message}")
+                    Log.w(TAG, "测试 ${server.url} 失败: ${e.message}")
                 }
             }
             
             if (serverResults.isEmpty()) {
                 // 关闭所有临时客户端
                 tempClients.forEach { it.close() }
-                Log.e(TAG, "All WebDAV servers failed to connect")
+                Log.e(TAG, "所有WebDAV服务器连接失败")
                 return@withContext Result.failure(Exception("All WebDAV servers failed to connect"))
             }
             
             // 按响应时间排序，选择最快的服务器
             serverResults.sortBy { it.second }
             val fastestServer = serverResults.first()
-            Log.i(TAG, "Fastest server: ${fastestServer.first.url} (${fastestServer.second}ms)")
+            Log.i(TAG, "最快服务器: ${fastestServer.first.url} (${fastestServer.second}ms)")
             
             // 关闭非最快的临时客户端，保留最快的
             val fastestServerUrl = fastestServer.first.url
@@ -132,11 +132,11 @@ class ConfigRepositoryImpl(
                 val client = WebDavClient.fromServer(server, deviceIdProvider)
                 
                 val remotePath = "/" + server.monitorDir.trim('/')
-                Log.d(TAG, "Downloading config from fastest server: $remotePath/$CONFIG_FILE_NAME")
+                Log.d(TAG, "正在从最快服务器下载配置: $remotePath/$CONFIG_FILE_NAME")
                 val data = client.downloadFile(remotePath, CONFIG_FILE_NAME)
                 
                 if (data.isEmpty()) {
-                    Log.e(TAG, "Config file not found on fastest server")
+                    Log.e(TAG, "在最快服务器上未找到配置文件")
                     return@withContext Result.failure(Exception("Config file not found"))
                 }
                 
@@ -156,17 +156,17 @@ class ConfigRepositoryImpl(
                 
                 // 触发回调，传递最快的服务器和客户端（无论配置是否变化）
                 // 首次启动时配置未变化，但也需要配置 WebDAV
-                Log.i(TAG, "Triggering WebDAV configuration with fastest server (serversChanged=$serversChanged)")
+                Log.i(TAG, "正在使用最快服务器触发WebDAV配置 (serversChanged=$serversChanged)")
                 onWebDavServersChanged?.invoke(newServers, server, client)
                 
-                Log.i(TAG, "Config synced successfully from fastest server: ${server.url}")
+                Log.i(TAG, "配置已从最快服务器同步成功: ${server.url}")
                 Result.success(Unit)
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to download config from fastest server: ${e.message}")
+                Log.e(TAG, "从最快服务器下载配置失败: ${e.message}")
                 Result.failure(e)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to sync config from remote: ${e.message}", e)
+            Log.e(TAG, "从远程同步配置失败: ${e.message}", e)
             Result.failure(e)
         }
     }
@@ -176,7 +176,7 @@ class ConfigRepositoryImpl(
      */
     fun setWebDavClient(client: WebDavClient) {
         this.webdavClient = client
-        Log.d(TAG, "WebDAV client configured")
+        Log.d(TAG, "WebDAV客户端已配置")
     }
     
     /**
@@ -184,7 +184,7 @@ class ConfigRepositoryImpl(
      */
     fun setDeviceIdProvider(provider: (() -> String)?) {
         this.deviceIdProvider = provider
-        Log.d(TAG, "DeviceIdProvider configured")
+        Log.d(TAG, "DeviceIdProvider已配置")
     }
     
     /**
@@ -193,7 +193,7 @@ class ConfigRepositoryImpl(
      */
     fun setOnWebDavServersChanged(callback: (List<com.youyou.monitor.core.domain.model.WebDavServer>, com.youyou.monitor.core.domain.model.WebDavServer?, WebDavClient?) -> Unit) {
         this.onWebDavServersChanged = callback
-        Log.d(TAG, "WebDAV servers change callback registered")
+        Log.d(TAG, "WebDAV服务器变化回调已注册")
     }
     
     /**
@@ -211,7 +211,7 @@ class ConfigRepositoryImpl(
                 val json = configFile.readText()
                 val config = parseConfig(json)
                 _configFlow.value = config
-                Log.i(TAG, "Local config loaded from ${configFile.absolutePath}")
+                Log.i(TAG, "本地配置已从 ${configFile.absolutePath} 加载")
                 return
             }
             

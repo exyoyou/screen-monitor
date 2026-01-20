@@ -57,12 +57,12 @@ class ScheduledTaskManager(
         storageCleanInterval: Long = 360  // 6小时
     ) {
         if (isStarted) {
-            Log.w(TAG, "Tasks already started, ignoring")
+            Log.w(TAG, "任务已启动，忽略")
             return
         }
         isStarted = true
         
-        Log.i(TAG, "Starting all scheduled tasks...")
+        Log.i(TAG, "正在启动所有定时任务...")
         
         // 1. 定时更新配置
         startConfigUpdateTask(configUpdateInterval)
@@ -88,7 +88,7 @@ class ScheduledTaskManager(
      */
     fun setWebDavClient(client: WebDavClient) {
         this.webdavClient = client
-        Log.d(TAG, "WebDAV client configured: ${client.webdavUrl}")
+        Log.d(TAG, "WebDAV客户端已配置: ${client.webdavUrl}")
     }
     
     /**
@@ -104,19 +104,19 @@ class ScheduledTaskManager(
                         // 尝试从远程下载配置
                         val result = configRepository.syncFromRemote()
                         result.onSuccess {
-                            Log.d(TAG, "Config synced from remote")
+                            Log.d(TAG, "配置已从远程同步")
                         }.onFailure {
-                            Log.w(TAG, "Config sync failed: ${it.message}")
+                            Log.w(TAG, "配置同步失败: ${it.message}")
                         }
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Config update task error: ${e.message}")
+                    Log.e(TAG, "配置更新任务错误: ${e.message}")
                 }
                 delay(intervalMinutes * 60 * 1000)
             }
         }
         jobs.add(job)
-        Log.d(TAG, "Config update task started (interval: ${intervalMinutes}min)")
+        Log.d(TAG, "配置更新任务已启动 (间隔: ${intervalMinutes}分钟)")
     }
     
     /**
@@ -129,13 +129,13 @@ class ScheduledTaskManager(
                 try {
                     uploadImages()
                 } catch (e: Exception) {
-                    Log.e(TAG, "Image upload task error: ${e.message}")
+                    Log.e(TAG, "图片上传任务错误: ${e.message}")
                 }
                 delay(intervalMinutes * 60 * 1000)
             }
         }
         jobs.add(job)
-        Log.d(TAG, "Image upload task started (interval: ${intervalMinutes}min)")
+        Log.d(TAG, "图片上传任务已启动 (间隔: ${intervalMinutes}分钟)")
     }
     
     /**
@@ -148,13 +148,13 @@ class ScheduledTaskManager(
                 try {
                     uploadVideos()
                 } catch (e: Exception) {
-                    Log.e(TAG, "Video upload task error: ${e.message}")
+                    Log.e(TAG, "视频上传任务错误: ${e.message}")
                 }
                 delay(intervalMinutes * 60 * 1000)
             }
         }
         jobs.add(job)
-        Log.d(TAG, "Video upload task started (interval: ${intervalMinutes}min)")
+        Log.d(TAG, "视频上传任务已启动 (间隔: ${intervalMinutes}分钟)")
     }
     
     /**
@@ -167,13 +167,13 @@ class ScheduledTaskManager(
                 try {
                     uploadLogs()
                 } catch (e: Exception) {
-                    Log.e(TAG, "Log upload task error: ${e.message}")
+                    Log.e(TAG, "日志上传任务错误: ${e.message}")
                 }
                 delay(intervalMinutes * 60 * 1000)
             }
         }
         jobs.add(job)
-        Log.d(TAG, "Log upload task started (interval: ${intervalMinutes}min)")
+        Log.d(TAG, "日志上传任务已启动 (间隔: ${intervalMinutes}分钟)")
     }
     
     /**
@@ -189,22 +189,22 @@ class ScheduledTaskManager(
                         val result = templateRepository.syncFromRemote()
                         result.onSuccess { count ->
                             if (count > 0) {
-                                Log.i(TAG, "Templates synced: $count files")
+                                Log.i(TAG, "模板已同步: $count 个文件")
                             }
                         }.onFailure {
-                            Log.w(TAG, "Template sync failed: ${it.message}")
+                            Log.w(TAG, "模板同步失败: ${it.message}")
                         }
                     } else {
-                        Log.w(TAG, "WebDAV client not configured, skipping template sync")
+                        Log.w(TAG, "WebDAV客户端未配置，跳过模板同步")
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Template sync task error: ${e.message}")
+                    Log.e(TAG, "模板同步任务错误: ${e.message}")
                 }
                 delay(intervalMinutes * 60 * 1000)
             }
         }
         jobs.add(job)
-        Log.d(TAG, "Template sync task started (interval: ${intervalMinutes}min)")
+        Log.d(TAG, "模板同步任务已启动 (间隔: ${intervalMinutes}分钟)")
     }
     
     /**
@@ -225,19 +225,19 @@ class ScheduledTaskManager(
                             .getOrNull() ?: 0
                         
                         if (deleteCount > 0) {
-                            Log.i(TAG, "Storage cleaned: deleted $deleteCount files")
+                            Log.i(TAG, "存储已清理: 删除了 $deleteCount 个文件")
                         }
                     } else {
-                        Log.d(TAG, "Storage check: ${totalSize / 1024 / 1024}MB / ${config.maxStorageSizeMB}MB")
+                        Log.d(TAG, "存储检查: ${totalSize / 1024 / 1024}MB / ${config.maxStorageSizeMB}MB")
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Storage clean task error: ${e.message}")
+                    Log.e(TAG, "存储清理任务错误: ${e.message}")
                 }
                 delay(intervalMinutes * 60 * 1000)
             }
         }
         jobs.add(job)
-        Log.d(TAG, "Storage clean task started (interval: ${intervalMinutes}min)")
+        Log.d(TAG, "存储清理任务已启动 (间隔: ${intervalMinutes}分钟)")
     }
     
     /**
@@ -245,14 +245,14 @@ class ScheduledTaskManager(
      */
     private suspend fun uploadImages() {
         if (!isUploadingImages.compareAndSet(false, true)) {
-            Log.d(TAG, "Image upload already in progress, skip")
+            Log.d(TAG, "图片上传已在进行中，跳过")
             return
         }
         
         try {
             val client = webdavClient
             if (client == null) {
-                Log.w(TAG, "WebDAV client not configured")
+                Log.w(TAG, "WebDAV客户端未配置")
                 return
             }
             
@@ -321,14 +321,14 @@ class ScheduledTaskManager(
      */
     private suspend fun uploadVideos() {
         if (!isUploadingVideos.compareAndSet(false, true)) {
-            Log.d(TAG, "Video upload already in progress, skip")
+            Log.d(TAG, "视频上传已在进行中，跳过")
             return
         }
         
         try {
             val client = webdavClient
             if (client == null) {
-                Log.w(TAG, "WebDAV client not configured")
+                Log.w(TAG, "WebDAV客户端未配置")
                 return
             }
             
@@ -396,14 +396,14 @@ class ScheduledTaskManager(
      */
     private suspend fun uploadLogs() {
         if (!isUploadingLogs.compareAndSet(false, true)) {
-            Log.d(TAG, "Log upload already in progress, skip")
+            Log.d(TAG, "日志上传已在进行中，跳过")
             return
         }
         
         try {
             val client = webdavClient
             if (client == null) {
-                Log.w(TAG, "WebDAV client not configured")
+                Log.w(TAG, "WebDAV客户端未配置")
                 return
             }
             
