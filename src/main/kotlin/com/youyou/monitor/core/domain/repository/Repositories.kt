@@ -51,11 +51,6 @@ interface TemplateRepository {
  */
 interface StorageRepository {
     /**
-     * 保存截图（ByteArray）
-     */
-    suspend fun saveScreenshot(data: ByteArray, tag: String): Result<String>
-    
-    /**
      * 保存截图（Bitmap）
      */
     suspend fun saveScreenshot(bitmap: Bitmap, filename: String): Result<String>

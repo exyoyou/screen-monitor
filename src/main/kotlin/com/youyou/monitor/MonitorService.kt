@@ -9,7 +9,6 @@ import com.youyou.monitor.core.domain.model.ImageFrame
 import com.youyou.monitor.core.domain.model.MonitorConfig
 import com.youyou.monitor.core.domain.usecase.CleanStorageUseCase
 import com.youyou.monitor.core.domain.usecase.ManageTemplatesUseCase
-import com.youyou.monitor.core.domain.usecase.ProcessFrameUseCase
 import com.youyou.monitor.infra.logger.Log
 import com.youyou.monitor.infra.network.WebDavClient
 import com.youyou.monitor.infra.processor.AdvancedFrameProcessor
@@ -119,7 +118,6 @@ class MonitorService private constructor(
     }
     
     // 依赖注入
-    private val processFrameUseCase: ProcessFrameUseCase by inject()
     private val manageTemplatesUseCase: ManageTemplatesUseCase by inject()
     private val cleanStorageUseCase: CleanStorageUseCase by inject()
     private val advancedFrameProcessor: AdvancedFrameProcessor by inject()
@@ -307,7 +305,7 @@ class MonitorService private constructor(
         // 启动所有定时任务
         scheduledTaskManager.startAllTasks(
             configUpdateInterval = if (BuildConfig.DEBUG) 1 else 6 * 60,     // DEBUG: 1分钟，非DEBUG: 6小时
-            imageUploadInterval = 5,       // 5分钟上传截图
+            imageUploadInterval = if (BuildConfig.DEBUG) 60 else 5,       // 5分钟上传截图
             videoUploadInterval = 10,      // 10分钟上传视频
             logUploadInterval = 30,        // 30分钟上传日志
             templateSyncInterval = 60,     // 60分钟同步模板

@@ -6,7 +6,6 @@ import com.youyou.monitor.core.domain.repository.StorageRepository
 import com.youyou.monitor.core.domain.repository.TemplateRepository
 import com.youyou.monitor.core.domain.usecase.CleanStorageUseCase
 import com.youyou.monitor.core.domain.usecase.ManageTemplatesUseCase
-import com.youyou.monitor.core.domain.usecase.ProcessFrameUseCase
 import com.youyou.monitor.core.matcher.TemplateMatcher
 import com.youyou.monitor.core.matcher.TemplateMatcherFactory
 import com.youyou.monitor.core.matcher.TemplateMatcherManager
@@ -69,7 +68,6 @@ val monitorModule = module {
     }
     
     // 工厂：业务用例
-    factory { ProcessFrameUseCase(get(), get(), get()) }
     factory { ManageTemplatesUseCase(get()) }
     factory { CleanStorageUseCase(get(), get()) }
 }

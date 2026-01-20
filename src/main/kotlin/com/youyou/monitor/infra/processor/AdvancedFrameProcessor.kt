@@ -319,7 +319,7 @@ class AdvancedFrameProcessor(
             // 使用 StorageRepository 保存
             val result = storageRepository.saveScreenshot(bmp, filename)
             result.onSuccess {
-                Log.i(TAG, "已保存：$filename")
+                Log.i(TAG, "已保存：$it")
             }.onFailure {
                 Log.e(TAG, "保存失败：${it.message}")
             }
