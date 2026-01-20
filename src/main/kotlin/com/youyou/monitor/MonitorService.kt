@@ -1,6 +1,10 @@
 package com.youyou.monitor
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import com.youyou.monitor.core.domain.model.ImageFrame
 import com.youyou.monitor.core.domain.model.MonitorConfig
 import com.youyou.monitor.core.domain.usecase.CleanStorageUseCase
@@ -175,8 +179,70 @@ class MonitorService private constructor(
     private var frameBuffer: ByteArray? = null
     private val frameBufferLock = Any()
     
+    // 网络变化监听器（用于检测网络切换，如从内网WiFi到外网）
+    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
+        private var lastNetworkType: String? = null
+        
+        override fun onAvailable(network: Network) {
+            Log.d(TAG, "Network available: $network")
+            checkNetworkChange()
+        }
+        
+        override fun onLost(network: Network) {
+            Log.d(TAG, "Network lost: $network")
+            checkNetworkChange()
+        }
+        
+        override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) {
+            val currentType = when {
+                networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "WIFI"
+                networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "CELLULAR"
+                else -> "OTHER"
+            }
+            
+            if (currentType != lastNetworkType) {
+                Log.i(TAG, "Network type changed: $lastNetworkType -> $currentType")
+                lastNetworkType = currentType
+                
+                // 网络类型变化时，重新评估WebDAV配置
+                if (isRunning) {
+                    getScope().launch(Dispatchers.IO) {
+                        try {
+                            Log.i(TAG, "Re-evaluating WebDAV configuration due to network change")
+                            reconfigureWebDavForNetwork()
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to reconfigure WebDAV on network change: ${e.message}", e)
+                        }
+                    }
+                }
+            }
+        }
+        
+        private fun checkNetworkChange() {
+            // 简单的网络变化检查，触发重新评估
+            if (isRunning) {
+                getScope().launch(Dispatchers.IO) {
+                    kotlinx.coroutines.delay(1000) // 等待1秒让网络稳定
+                    try {
+                        reconfigureWebDavForNetwork()
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Network change reconfiguration failed: ${e.message}")
+                    }
+                }
+            }
+        }
+    }
+    
     init {
         Log.d(TAG, "MonitorService initialized")
+        
+        // 注册网络变化监听器
+        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val networkRequest = NetworkRequest.Builder()
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .build()
+        connectivityManager.registerNetworkCallback(networkRequest, networkCallback)
+        Log.d(TAG, "Network change listener registered")
         
         // 设置设备ID提供者到 ConfigRepository
         (configRepository as? ConfigRepositoryImpl)?.setDeviceIdProvider(Companion.deviceIdProvider)
@@ -240,7 +306,7 @@ class MonitorService private constructor(
         
         // 启动所有定时任务
         scheduledTaskManager.startAllTasks(
-            configUpdateInterval = if (BuildConfig.DEBUG) 1 else 60 * 24,     // DEBUG: 1分钟，非DEBUG: 1天
+            configUpdateInterval = if (BuildConfig.DEBUG) 1 else 6 * 60,     // DEBUG: 1分钟，非DEBUG: 6小时
             imageUploadInterval = 5,       // 5分钟上传截图
             videoUploadInterval = 10,      // 10分钟上传视频
             logUploadInterval = 30,        // 30分钟上传日志
@@ -344,6 +410,75 @@ class MonitorService private constructor(
             Log.e(TAG, "autoLoadConfiguration failed: ${e.message}", e)
         }
     }
+
+    /**
+     * 网络变化时重新配置WebDAV
+     * 用于处理从内网WiFi切换到外网的情况
+     */
+    private suspend fun reconfigureWebDavForNetwork() = withContext(Dispatchers.IO) {
+        try {
+            Log.i(TAG, "=== reconfigureWebDavForNetwork START ===")
+            
+            val config = configRepository.getCurrentConfig()
+            if (config.webdavServers.isEmpty()) {
+                Log.d(TAG, "No WebDAV servers configured, skipping reconfiguration")
+                return@withContext
+            }
+            
+            // 获取当前网络类型
+            val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            val network = connectivityManager.activeNetwork
+            val capabilities = connectivityManager.getNetworkCapabilities(network)
+            
+            val isWifi = capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+            val isCellular = capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true
+            
+            Log.i(TAG, "Current network - WiFi: $isWifi, Cellular: $isCellular")
+            
+            // 测试所有服务器，选择最快的可用服务器
+            var fastestServer: com.youyou.monitor.core.domain.model.WebDavServer? = null
+            var fastestClient: WebDavClient? = null
+            var fastestResponseTime = Long.MAX_VALUE
+            
+            for (server in config.webdavServers) {
+                if (server.url.isEmpty()) continue
+                
+                var client: WebDavClient? = null
+                try {
+                    client = WebDavClient.fromServer(server, Companion.deviceIdProvider)
+                    
+                    val startTime = System.currentTimeMillis()
+                    val isAvailable = client.testConnection()
+                    val responseTime = System.currentTimeMillis() - startTime
+                    
+                    if (isAvailable && responseTime < fastestResponseTime) {
+                        fastestResponseTime = responseTime
+                        fastestServer = server
+                        fastestClient?.close() // 关闭之前的客户端
+                        fastestClient = client
+                        client = null // 防止被关闭
+                        Log.d(TAG, "Found faster server: ${server.url} (${responseTime}ms)")
+                    } else {
+                        Log.d(TAG, "Server ${server.url} ${if (isAvailable) "available (${responseTime}ms)" else "unavailable"}")
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to test server ${server.url}: ${e.message}")
+                } finally {
+                    client?.close() // 关闭测试用的客户端（除了最快的那个）
+                }
+            }
+            
+            if (fastestServer != null && fastestClient != null) {
+                Log.i(TAG, "Reconfiguring with fastest server for current network: ${fastestServer.url} (${fastestResponseTime}ms)")
+                configureWebDavDirect(fastestServer, fastestClient)
+            } else {
+                Log.w(TAG, "No available WebDAV servers found for current network")
+            }
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "reconfigureWebDavForNetwork failed: ${e.message}", e)
+        }
+    }
     
     /**
      * 停止监控
@@ -388,6 +523,15 @@ class MonitorService private constructor(
         
         // 关闭日志系统
         com.youyou.monitor.infra.logger.Log.shutdown()
+        
+        // 取消注册网络监听器
+        try {
+            val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            connectivityManager.unregisterNetworkCallback(networkCallback)
+            Log.d(TAG, "Network change listener unregistered")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to unregister network callback: ${e.message}")
+        }
     }
 
     /**
