@@ -5,6 +5,7 @@ import com.youyou.monitor.core.domain.model.MonitorConfig
 import com.youyou.monitor.core.domain.repository.ConfigRepository
 import com.youyou.monitor.infra.logger.Log
 import com.youyou.monitor.infra.network.WebDavClient
+import com.youyou.monitor.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,7 +29,20 @@ class ConfigRepositoryImpl(
     companion object {
         const val TAG = "ConfigRepository"
         const val CONFIG_FILE_NAME = "config.json"
+        const val DEBUG_CONFIG_FILE_NAME = "debug_config.json"
         const val DEFAULT_CONFIG_ASSET = "monitor_config_default.json"
+    }
+    
+    /**
+     * 获取远程配置文件名
+     * 在 debug 模式下使用 debug_config.json，否则使用 config.json
+     */
+    private fun getRemoteConfigFileName(): String {
+        return if (BuildConfig.DEBUG) {
+            DEBUG_CONFIG_FILE_NAME
+        } else {
+            CONFIG_FILE_NAME
+        }
     }
     
     private val configFile = File(context.filesDir, CONFIG_FILE_NAME)
@@ -131,13 +145,14 @@ class ConfigRepositoryImpl(
                 val server = fastestServer.first
                 val client = WebDavClient.fromServer(server, deviceIdProvider)
                 
+                val remoteConfigFileName = getRemoteConfigFileName()
                 val remotePath = "/" + server.monitorDir.trim('/')
-                Log.d(TAG, "正在从最快服务器下载配置: $remotePath/$CONFIG_FILE_NAME")
-                val data = client.downloadFile(remotePath, CONFIG_FILE_NAME)
+                Log.d(TAG, "正在从最快服务器下载配置: $remotePath/$remoteConfigFileName")
+                val data = client.downloadFile(remotePath, remoteConfigFileName)
                 
                 if (data.isEmpty()) {
-                    Log.e(TAG, "在最快服务器上未找到配置文件")
-                    return@withContext Result.failure(Exception("Config file not found"))
+                    Log.e(TAG, "在最快服务器上未找到配置文件: $remoteConfigFileName")
+                    return@withContext Result.failure(Exception("Config file not found: $remoteConfigFileName"))
                 }
                 
                 val json = String(data, Charsets.UTF_8)
