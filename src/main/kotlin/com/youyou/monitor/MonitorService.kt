@@ -22,6 +22,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.core.component.KoinComponent
@@ -124,6 +125,7 @@ class MonitorService private constructor(
     private val scheduledTaskManager: ScheduledTaskManager by inject()
     private val configRepository: ConfigRepository by inject()  // 修改：注入接口而不是实现类
     private val templateRepository: com.youyou.monitor.core.domain.repository.TemplateRepository by inject()
+    private val storageRepository: com.youyou.monitor.core.domain.repository.StorageRepository by inject()
     
     // 协程作用域（使用 lazy 延迟初始化，支持 stop 后重新 start）
     @Volatile
@@ -134,6 +136,18 @@ class MonitorService private constructor(
     private var scopeJob: Job? = null
     
     private val scopeLock = Any()
+    
+    private fun startConfigMonitoring() {
+        getScope().launch {
+            configRepository.getConfigFlow()
+                .distinctUntilChanged { old, new -> 
+                    old.rootDir == new.rootDir && old.preferExternalStorage == new.preferExternalStorage 
+                }
+                .collect {
+                    Log.updateLogDir { storageRepository.getRootDir() }
+                }
+        }
+    }
     
     private fun getScope(): CoroutineScope {
         // 快速路径：如果 scope 和 job 都存在且活跃，直接返回
@@ -152,7 +166,9 @@ class MonitorService private constructor(
                 existingScope
             } else {
                 val newJob = SupervisorJob()
-                val newScope = CoroutineScope(Dispatchers.Main + newJob)
+                // 在初始化阶段使用 Default 调度器，避免 Main 调度器在 Application.onCreate 时不可用的问题
+                val dispatcher = if (isRunning) Dispatchers.Main else Dispatchers.Default
+                val newScope = CoroutineScope(dispatcher + newJob)
                 scope = newScope
                 scopeJob = newJob
                 newScope
@@ -285,6 +301,9 @@ class MonitorService private constructor(
             }
             isRunning = true
         }
+        
+        // 启动配置变化监听
+        startConfigMonitoring()
         
         // 重置处理器状态
         advancedFrameProcessor.reset()

@@ -76,6 +76,11 @@ interface StorageRepository {
     fun getRootDirPath(): String
     
     /**
+     * 获取根目录（File对象）
+     */
+    fun getRootDir(): File
+    
+    /**
      * 列出所有截图文件
      */
     suspend fun listScreenshots(): Result<List<File>>

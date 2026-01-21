@@ -78,6 +78,37 @@ object Log {
         }
     }
 
+    /**
+     * 更新日志目录（用于动态配置变更）
+     */
+    fun updateLogDir(getRootDir: () -> File) {
+        try {
+            val newLogDir = File(getRootDir(), "Log")
+            if (newLogDir == logDir) {
+                AndroidLog.d(TAG, "日志目录未改变：${newLogDir.absolutePath}")
+                return
+            }
+
+            // 关闭当前日志文件
+            shutdown()
+
+            // 设置新目录
+            logDir = newLogDir
+            if (logDir?.exists() == false) {
+                logDir?.mkdirs()
+            }
+
+            // 创建新日志文件
+            createNewLogFile()
+            isInitialized = true
+            AndroidLog.i(TAG, "FileLog 目录更新完成：${logDir?.absolutePath}")
+        } catch (e: Exception) {
+            AndroidLog.e(TAG, "更新 FileLog 目录失败：${e.message}", e)
+        }
+    }
+
+
+
     private fun createNewLogFile() {
         try {
             val timestamp = fileNameFormat.get()!!.format(Date())
@@ -186,9 +217,18 @@ object Log {
             writeToFile("========================================")
             writeToFile("Log ended at: ${dateFormat.get()!!.format(Date())}")
             writeToFile("========================================")
+            // 不关闭executor，保持可用
+        } catch (e: Exception) {
+            AndroidLog.e(TAG, "关闭当前日志文件失败：${e.message}", e)
+        }
+    }
+
+    fun shutdownCompletely() {
+        try {
+            shutdown()
             executor.shutdown()
         } catch (e: Exception) {
-            AndroidLog.e(TAG, "关闭失败：${e.message}", e)
+            AndroidLog.e(TAG, "完全关闭失败：${e.message}", e)
         }
     }
 }

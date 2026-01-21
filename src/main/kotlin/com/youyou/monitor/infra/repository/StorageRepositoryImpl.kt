@@ -94,7 +94,7 @@ class StorageRepositoryImpl(
     /**
      * 获取根目录（支持优先外部存储）
      */
-    private fun getRootDir(): File {
+    override fun getRootDir(): File {
         val config = currentConfig
         val baseDir = if (config.preferExternalStorage) {
             val ext = File("/storage/emulated/0", config.rootDir)
