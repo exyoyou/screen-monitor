@@ -26,7 +26,7 @@ import org.koin.dsl.module
 val monitorModule = module {
     // 单例：基础设施层
     single<ConfigRepository> { 
-        ConfigRepositoryImpl(androidContext())
+        ConfigRepositoryImpl(androidContext(), get())
     }
     
     // 同时注册实现类（供 WebDavConfigManager 使用）
@@ -35,7 +35,7 @@ val monitorModule = module {
     }
     
     single<StorageRepository> { 
-        StorageRepositoryImpl(androidContext(), get())
+        StorageRepositoryImpl(androidContext())
     }
     
     // 单例：匹配器管理器

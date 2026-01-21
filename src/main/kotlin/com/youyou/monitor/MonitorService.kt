@@ -145,6 +145,7 @@ class MonitorService private constructor(
                 }
                 .collect {
                     Log.updateLogDir { storageRepository.getRootDir() }
+                    storageRepository.updateConfig(it)
                 }
         }
     }

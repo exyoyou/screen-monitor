@@ -3,6 +3,7 @@ package com.youyou.monitor.infra.repository
 import android.content.Context
 import com.youyou.monitor.core.domain.model.MonitorConfig
 import com.youyou.monitor.core.domain.repository.ConfigRepository
+import com.youyou.monitor.core.domain.repository.StorageRepository
 import com.youyou.monitor.infra.logger.Log
 import com.youyou.monitor.infra.network.WebDavClient
 import com.youyou.monitor.BuildConfig
@@ -23,7 +24,8 @@ import java.io.File
  * - 配置变更通知（Flow）
  */
 class ConfigRepositoryImpl(
-    private val context: Context
+    private val context: Context,
+    private val storageRepository: StorageRepository
 ) : ConfigRepository {
     
     companion object {
@@ -45,7 +47,8 @@ class ConfigRepositoryImpl(
         }
     }
     
-    private val configFile = File(context.filesDir, CONFIG_FILE_NAME)
+    private var configFile = File(context.filesDir, CONFIG_FILE_NAME) // 临时初始化，后续会更新
+    
     private val _configFlow = MutableStateFlow(MonitorConfig.default())
     
     // WebDAV 客户端（可选，用于远程同步）
@@ -60,6 +63,9 @@ class ConfigRepositoryImpl(
     init {
         // 初始化时加载配置（优先级：本地文件 > assets 默认 > 硬编码默认）
         loadLocalConfig()
+        
+        // 配置加载后，更新configFile到正确的目录
+        updateConfigFileLocation()
     }
     
     override fun getConfigFlow(): Flow<MonitorConfig> = _configFlow.asStateFlow()
@@ -70,6 +76,9 @@ class ConfigRepositoryImpl(
         try {
             // 更新内存
             _configFlow.value = config
+            
+            // 更新配置文件位置（如果rootDir或preferExternalStorage改变）
+            updateConfigFileLocation()
             
             // 保存到本地
             saveLocalConfig(config)
@@ -347,5 +356,25 @@ class ConfigRepositoryImpl(
         obj.put("webdavServers", serversArray)
         
         return obj.toString(2)
+    }
+    
+    /**
+     * 更新配置文件位置
+     */
+    private fun updateConfigFileLocation() {
+        val newConfigFile = File(storageRepository.getRootDir(), CONFIG_FILE_NAME)
+        if (newConfigFile != configFile) {
+            // 如果位置改变，需要迁移现有配置文件
+            if (configFile.exists() && !newConfigFile.exists()) {
+                try {
+                    configFile.copyTo(newConfigFile)
+                    configFile.delete()
+                    Log.i(TAG, "配置文件已迁移到新位置: ${newConfigFile.absolutePath}")
+                } catch (e: Exception) {
+                    Log.e(TAG, "迁移配置文件失败: ${e.message}", e)
+                }
+            }
+            configFile = newConfigFile
+        }
     }
 }

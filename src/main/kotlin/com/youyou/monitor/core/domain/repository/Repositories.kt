@@ -99,4 +99,9 @@ interface StorageRepository {
      * 获取视频目录
      */
     fun getVideoDirectory(): File
+    
+    /**
+     * 更新配置（用于动态路径调整）
+     */
+    fun updateConfig(config: MonitorConfig)
 }

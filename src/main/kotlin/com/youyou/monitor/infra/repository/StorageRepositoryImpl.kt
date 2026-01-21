@@ -29,8 +29,7 @@ import java.util.*
  * - 动态存储路径（支持外部存储）
  */
 class StorageRepositoryImpl(
-    private val context: Context,
-    private val configRepository: ConfigRepository
+    private val context: Context
 ) : StorageRepository {
     
     companion object {
@@ -66,29 +65,6 @@ class StorageRepositoryImpl(
     
     private fun clearFailedMigrations() {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().remove(KEY_FAILED_MIGRATIONS).apply()
-    }
-    
-    init {
-        // 监听配置变更
-        configRepository.getConfigFlow()
-            .onEach { newConfig ->
-                val oldConfig = currentConfig
-                val hasFailures = loadFailedMigrations().isNotEmpty()
-                Log.d(TAG, "检测到配置变化: preferExternalStorage ${oldConfig.preferExternalStorage} -> ${newConfig.preferExternalStorage}, rootDir ${oldConfig.rootDir} -> ${newConfig.rootDir}, 有失败迁移=${hasFailures}")
-                if (newConfig.preferExternalStorage != oldConfig.preferExternalStorage ||
-                    newConfig.rootDir != oldConfig.rootDir ||
-                    newConfig.screenshotDir != oldConfig.screenshotDir ||
-                    newConfig.videoDir != oldConfig.videoDir ||
-                    newConfig.templateDir != oldConfig.templateDir ||
-                    hasFailures) {
-                    Log.i(TAG, "存储路径已更改或有失败迁移需要重试：优先外部存储=${newConfig.preferExternalStorage}, 根目录=${newConfig.rootDir}, 截图目录=${newConfig.screenshotDir}, 视频目录=${newConfig.videoDir}, 模板目录=${newConfig.templateDir}, 有失败=${hasFailures}")
-                    
-                    // 异步迁移文件
-                    migrateStorageAsync(oldConfig, newConfig)
-                }
-                currentConfig = newConfig
-            }
-            .launchIn(scope)
     }
     
     /**
@@ -574,5 +550,23 @@ class StorageRepositoryImpl(
         } catch (e: Exception) {
             Log.e(TAG, "管理 .nomedia 文件失败：${e.message}", e)
         }
+    }
+
+    override fun updateConfig(config: MonitorConfig) {
+        val oldConfig = currentConfig
+        val hasFailures = loadFailedMigrations().isNotEmpty()
+        Log.d(TAG, "检测到配置变化: preferExternalStorage ${oldConfig.preferExternalStorage} -> ${config.preferExternalStorage}, rootDir ${oldConfig.rootDir} -> ${config.rootDir}, 有失败迁移=${hasFailures}")
+        if (config.preferExternalStorage != oldConfig.preferExternalStorage ||
+            config.rootDir != oldConfig.rootDir ||
+            config.screenshotDir != oldConfig.screenshotDir ||
+            config.videoDir != oldConfig.videoDir ||
+            config.templateDir != oldConfig.templateDir ||
+            hasFailures) {
+            Log.i(TAG, "存储路径已更改或有失败迁移需要重试：优先外部存储=${config.preferExternalStorage}, 根目录=${config.rootDir}, 截图目录=${config.screenshotDir}, 视频目录=${config.videoDir}, 模板目录=${config.templateDir}, 有失败=${hasFailures}")
+            
+            // 异步迁移文件
+            migrateStorageAsync(oldConfig, config)
+        }
+        currentConfig = config
     }
 }

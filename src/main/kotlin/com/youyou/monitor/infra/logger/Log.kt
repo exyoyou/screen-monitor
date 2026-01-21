@@ -25,6 +25,8 @@ import java.util.concurrent.Executors
  */
 object Log {
     private const val TAG = "FileLog"
+
+    private const val DIR_NAME = "Logs"
     private const val MAX_LOG_FILE_SIZE = 1 * 1024 * 1024 // 1MB
 
     private var logDir: File? = null
@@ -65,7 +67,7 @@ object Log {
         }
 
         try {
-            logDir = File(context.filesDir, "Logs")
+            logDir = File(context.filesDir, DIR_NAME)
             if (logDir?.exists() == false) {
                 logDir?.mkdirs()
             }
@@ -83,7 +85,7 @@ object Log {
      */
     fun updateLogDir(getRootDir: () -> File) {
         try {
-            val newLogDir = File(getRootDir(), "Log")
+            val newLogDir = File(getRootDir(), DIR_NAME)
             if (newLogDir == logDir) {
                 AndroidLog.d(TAG, "日志目录未改变：${newLogDir.absolutePath}")
                 return
