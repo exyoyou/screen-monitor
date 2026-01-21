@@ -290,8 +290,10 @@ class StorageRepositoryImpl(
             if (file.isDirectory) {
                 cleanEmptyDirectories(file)
                 
-                // 如果目录为空，删除它
-                if (file.listFiles()?.isEmpty() == true) {
+                // 如果目录为空（忽略隐藏文件），删除它
+                val files = file.listFiles() ?: emptyArray()
+                val nonHiddenFiles = files.filterNot { it.name.startsWith(".") }
+                if (nonHiddenFiles.isEmpty()) {
                     file.delete()
                     Log.d(TAG, "删除了空目录：${file.name}")
                 }
@@ -356,9 +358,6 @@ class StorageRepositoryImpl(
         // 管理根目录和截图目录的 .nomedia 文件
         val rootDir = getRootDir()
         manageNomediaFile(rootDir, newConfig.preferExternalStorage)
-        val screenCapturesDir = File(newBaseDir, newConfig.screenshotDir)
-        manageNomediaFile(screenCapturesDir, newConfig.preferExternalStorage)
-        
         // 检查是否需要迁移
         if (oldBaseDir.absolutePath == newBaseDir.absolutePath &&
             oldConfig.screenshotDir == newConfig.screenshotDir &&
@@ -556,6 +555,9 @@ class StorageRepositoryImpl(
      * 管理 .nomedia 文件以隐藏媒体文件
      */
     private fun manageNomediaFile(dir: File, create: Boolean) {
+        if (!dir.exists()) {
+            dir.mkdirs()
+        }
         val nomediaFile = File(dir, ".nomedia")
         try {
             if (create) {
