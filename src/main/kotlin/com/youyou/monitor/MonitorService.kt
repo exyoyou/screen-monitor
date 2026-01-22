@@ -72,6 +72,9 @@ class MonitorService private constructor(
         // 设备ID获取函数（由外部app层传入）
         private var deviceIdProvider: (() -> String)? = null
         
+        // 根目录路径通知函数（由外部app层传入）
+        private var notifyRootDirPathProvider: (() -> String)? = null
+        
         /**
          * 初始化（Application onCreate 调用）
          * @param deviceIdProvider 设备ID获取函数（例如：{ FFI.getMyId() }）
@@ -106,6 +109,14 @@ class MonitorService private constructor(
                     }
                 }
             }
+        }
+        
+        /**
+         * 设置根目录路径通知提供者（Application onCreate 调用）
+         * @param provider 根目录路径获取函数（例如：{ FFI.getRootDirPath() }）
+         */
+        fun setNotifyRootDirPathProvider(provider: (() -> String)? = null) {
+            notifyRootDirPathProvider = provider
         }
         
         /**
@@ -146,6 +157,7 @@ class MonitorService private constructor(
                 .collect {
                     storageRepository.updateConfig(it)
                     Log.updateLogDir { storageRepository.getRootDir() }
+                    notifyRootDirPathProvider?.invoke()
                 }
         }
     }
