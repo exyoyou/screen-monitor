@@ -63,9 +63,6 @@ class ConfigRepositoryImpl(
     init {
         // 初始化时加载配置（优先级：本地文件 > assets 默认 > 硬编码默认）
         loadLocalConfig()
-        
-        // 配置加载后，更新configFile到正确的目录
-        updateConfigFileLocation()
     }
     
     override fun getConfigFlow(): Flow<MonitorConfig> = _configFlow.asStateFlow()
@@ -76,10 +73,6 @@ class ConfigRepositoryImpl(
         try {
             // 更新内存
             _configFlow.value = config
-            
-            // 更新配置文件位置（如果rootDir或preferExternalStorage改变）
-            updateConfigFileLocation()
-            
             // 保存到本地
             saveLocalConfig(config)
             
@@ -283,6 +276,8 @@ class ConfigRepositoryImpl(
         } catch (e: Exception) {
             Log.e(TAG, "Failed to save local config: ${e.message}", e)
         }
+        // 配置加载后，更新configFile到正确的目录
+        updateConfigFileLocation()
     }
     
     /**

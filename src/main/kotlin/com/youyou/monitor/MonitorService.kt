@@ -144,8 +144,8 @@ class MonitorService private constructor(
                     old.rootDir == new.rootDir && old.preferExternalStorage == new.preferExternalStorage 
                 }
                 .collect {
-                    Log.updateLogDir { storageRepository.getRootDir() }
                     storageRepository.updateConfig(it)
+                    Log.updateLogDir { storageRepository.getRootDir() }
                 }
         }
     }

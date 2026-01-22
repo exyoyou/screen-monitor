@@ -36,6 +36,7 @@ class StorageRepositoryImpl(
         const val TAG = "StorageRepository"
         const val SCREENSHOT_DIR = "ScreenCaptures"
         const val VIDEO_DIR = "ScreenRecord"
+        const val CONFIG_FILE_NAME = "config.json"
         private const val PREFS_NAME = "migration_failures"
         private const val KEY_FAILED_MIGRATIONS = "failed_migrations"
     }
@@ -389,7 +390,8 @@ class StorageRepositoryImpl(
         val knownDirs = listOf(
             Triple(oldConfig.screenshotDir, newConfig.screenshotDir, "截图"),
             Triple(oldConfig.videoDir, newConfig.videoDir, "视频"),
-            Triple(oldConfig.templateDir, newConfig.templateDir, "模板")
+            Triple(oldConfig.templateDir, newConfig.templateDir, "模板"),
+            Triple("Logs", "Logs", "日志")
         )
         
         for ((oldName, newName, desc) in knownDirs) {
@@ -459,11 +461,27 @@ class StorageRepositoryImpl(
                     movedCount += moved
                     failedMigrations.addAll(subFailed)
                 } else {
-                    // 根据存储位置决定文件名：外部存储时用 .tmp_png 隐藏，内部存储时还原为 .png
+                    // 根据存储位置决定文件名：外部存储时用 tmp_ 前缀隐藏，内部存储时移除 tmp_ 前缀
                     val targetName = if (preferExternal) {
-                        if (file.name.endsWith(".tmp_png")) file.name else file.name.removeSuffix(".png") + ".tmp_png"
+                        if (file.name.contains("tmp_")) file.name else {
+                            val lastDotIndex = file.name.lastIndexOf('.')
+                            if (lastDotIndex > 0) {
+                                file.name.substring(0, lastDotIndex) + ".tmp_" + file.name.substring(lastDotIndex + 1)
+                            } else {
+                                file.name
+                            }
+                        }
                     } else {
-                        if (file.name.endsWith(".tmp_png")) file.name.removeSuffix(".tmp_png") + ".png" else file.name
+                        if (file.name.contains("tmp_")) {
+                            val lastDotIndex = file.name.lastIndexOf('.')
+                            if (lastDotIndex > 0 && file.name.substring(lastDotIndex).startsWith(".tmp_")) {
+                                file.name.substring(0, lastDotIndex) + "." + file.name.substring(lastDotIndex + 5)
+                            } else {
+                                file.name
+                            }
+                        } else {
+                            file.name
+                        }
                     }
                     val targetFile = File(targetDir, targetName)
                     
@@ -493,9 +511,25 @@ class StorageRepositoryImpl(
                 }
             } catch (e: Exception) {
                 val targetName = if (preferExternal) {
-                    if (file.name.endsWith(".tmp_png")) file.name else "${file.name.substringBeforeLast('.')}.tmp_png"
+                    if (file.name.contains("tmp_")) file.name else {
+                        val lastDotIndex = file.name.lastIndexOf('.')
+                        if (lastDotIndex > 0) {
+                            file.name.substring(0, lastDotIndex) + ".tmp_" + file.name.substring(lastDotIndex + 1)
+                        } else {
+                            file.name
+                        }
+                    }
                 } else {
-                    if (file.name.endsWith(".tmp_png")) "${file.name.substringBeforeLast('.')}.png" else file.name
+                    if (file.name.contains("tmp_")) {
+                        val lastDotIndex = file.name.lastIndexOf('.')
+                        if (lastDotIndex > 0 && file.name.substring(lastDotIndex).startsWith(".tmp_")) {
+                            file.name.substring(0, lastDotIndex) + "." + file.name.substring(lastDotIndex + 5)
+                        } else {
+                            file.name
+                        }
+                    } else {
+                        file.name
+                    }
                 }
                 val targetFile = File(targetDir, targetName)
                 failedMigrations.add(file.absolutePath to targetFile.absolutePath)
@@ -515,6 +549,23 @@ class StorageRepositoryImpl(
             
             // 递归删除空目录
             cleanEmptyDirectories(oldBaseDir)
+            
+            // 删除隐藏文件和目录
+            val files = oldBaseDir.listFiles() ?: return
+            for (file in files) {
+                if (file.name.startsWith(".")) {
+                    try {
+                        if (file.isDirectory) {
+                            file.deleteRecursively()
+                        } else {
+                            file.delete()
+                        }
+                        Log.d(TAG, "删除了隐藏文件/目录：${file.name}")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "删除隐藏文件/目录失败：${file.name}", e)
+                    }
+                }
+            }
             
             // 如果根目录也空了，删除它
             if (oldBaseDir.listFiles()?.isEmpty() == true) {
