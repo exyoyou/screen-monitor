@@ -263,12 +263,6 @@ class ConfigRepositoryImpl(
     }
 
     /**
-     * 保存本地配置
-     */
-    private fun saveLocalConfig(config: MonitorConfig) {
-    }
-
-    /**
      * 解析配置 JSON
      */
     private fun parseConfig(json: String): MonitorConfig {

@@ -159,6 +159,12 @@ class MonitorService private constructor(
                 }
                 .collect {
                     storageRepository.updateConfig(it)
+                    // 将配置变更显式下发到 TemplateRepository（替代 TemplateRepository 内部订阅）
+                    try {
+                        templateRepository.updateConfig(it)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "调用 templateRepository.updateConfig 失败: ${e.message}")
+                    }
                     notifyRootDirPathProvider?.invoke()
                 }
         }
