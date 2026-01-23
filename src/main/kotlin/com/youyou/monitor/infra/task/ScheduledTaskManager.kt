@@ -278,12 +278,8 @@ class ScheduledTaskManager(
                                     ""
                                 }
                                 
-                                // 如果文件名以 .tmpjpg 结尾，上传时改为 .jpg
-                                val uploadFileName = if (file.name.endsWith(".tmpjpg")) {
-                                    file.name.replace(".tmpjpg", ".jpg")
-                                } else {
-                                    file.name
-                                }
+                                // 通过统一方法处理上传文件名（去掉扩展名前置的 tmp_ 或 tmp）
+                                val uploadFileName = normalizeUploadFileName(file.name)
                                 
                                 val result = client.uploadFile(subPath, uploadFileName, file)
                                 if (result) {
@@ -364,7 +360,8 @@ class ScheduledTaskManager(
                         ""
                     }
                     
-                    val result = client.uploadFile(subPath, file.name, file)
+                    val uploadFileName = normalizeUploadFileName(file.name)
+                    val result = client.uploadFile(subPath, uploadFileName, file)
                     
                     if (result) {
                         // 上传成功后删除本地文件
@@ -502,6 +499,19 @@ class ScheduledTaskManager(
         } catch (e: Exception) {
             Log.e(TAG, "Clean empty directories error: ${e.message}")
         }
+    }
+
+    // 将上传文件名的规范化提取为可复用方法：
+    // 如果扩展名以 tmp_ 或 tmp 开头（例如 tmp_png / tmpjpg），去掉前缀
+    private fun normalizeUploadFileName(name: String): String {
+        val idx = name.lastIndexOf('.')
+        if (idx >= 0 && idx < name.length - 1) {
+            val base = name.substring(0, idx)
+            var ext = name.substring(idx + 1)
+            ext = ext.replaceFirst(Regex("(?i)^tmp_?"), "")
+            return "$base.$ext"
+        }
+        return name
     }
     
     /**
