@@ -44,6 +44,11 @@ interface TemplateRepository {
      * 通知模板已更新（触发重新加载）
      */
     fun notifyTemplatesUpdated()
+    
+    /**
+     * 更新配置（由上层显式调用，例如 MonitorService）
+     */
+    fun updateConfig(config: MonitorConfig)
 }
 
 /**

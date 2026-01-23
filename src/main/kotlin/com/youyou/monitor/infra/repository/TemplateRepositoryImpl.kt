@@ -2,16 +2,16 @@ package com.youyou.monitor.infra.repository
 
 import android.content.Context
 import com.youyou.monitor.core.domain.model.MonitorConfig
-import com.youyou.monitor.core.domain.repository.ConfigRepository
+// ConfigRepository no longer injected here; updates are done via updateConfig()
 import com.youyou.monitor.core.domain.repository.TemplateRepository
 import com.youyou.monitor.core.matcher.TemplateMatcherManager
+import com.youyou.monitor.core.domain.repository.StorageRepository
 import com.youyou.monitor.infra.logger.Log
 import com.youyou.monitor.infra.network.WebDavClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
+// config flow subscription removed; use explicit updateConfig() instead
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -27,7 +27,7 @@ import java.io.File
  */
 class TemplateRepositoryImpl(
     private val context: Context,
-    private val configRepository: ConfigRepository,
+    private val storageRepository: StorageRepository,
     private val matcherManager: TemplateMatcherManager
 ) : TemplateRepository {
     
@@ -41,71 +41,44 @@ class TemplateRepositoryImpl(
     @Volatile
     private var currentConfig: MonitorConfig = MonitorConfig.default()
     
-    @Volatile
-    private var isMigrating = false
-    
-    init {
-        // 监听配置变更
-        configRepository.getConfigFlow()
-            .onEach { newConfig ->
-                val oldConfig = currentConfig
-                if (newConfig.preferExternalStorage != oldConfig.preferExternalStorage ||
-                    newConfig.rootDir != oldConfig.rootDir ||
-                    newConfig.templateDir != oldConfig.templateDir ||
-                    newConfig.matcherType != oldConfig.matcherType) {
-                    Log.i(TAG, "模板路径或匹配器已更改，正在迁移...")
-                    
-                    // 异步迁移模板
-                    migrateTemplatesAsync(oldConfig, newConfig)
-                }
-                currentConfig = newConfig
-                
-                // 如果匹配器类型改变，更新远程目录并重新加载模板
-                if (newConfig.matcherType != oldConfig.matcherType && webdavClient != null) {
-                    val baseRemoteDir = webdavClient?.let { 
-                        // 从当前的 remoteTemplateDir 反推 baseRemoteDir
-                        val currentRemoteDir = remoteTemplateDir
-                        if (currentRemoteDir.contains("/")) {
-                            currentRemoteDir.substringBeforeLast("/")
-                        } else {
-                            "Templates"
-                        }
-                    } ?: "Templates"
-                    remoteTemplateDir = "$baseRemoteDir/${newConfig.matcherType}"
-                    Log.d(TAG, "由于匹配器类型更改，已更新remoteTemplateDir: $remoteTemplateDir")
-                    
-                    // 异步重新下载模板
-                    scope.launch(Dispatchers.IO) {
-                        Log.i(TAG, "匹配器类型已更改，正在从新的远程目录同步模板...")
+    /**
+     * 外部显式更新配置（由 MonitorService 在配置变化时调用）
+     * 保持与之前内部订阅相同的行为：当 matcherType 变更且已配置 WebDAV 客户端时，更新 remoteTemplateDir 并异步同步模板。
+     */
+    override fun updateConfig(config: MonitorConfig) {
+        try {
+            val oldConfig = currentConfig
+            currentConfig = config
+
+            if (config.matcherType != oldConfig.matcherType && webdavClient != null) {
+                val baseRemoteDir = webdavClient?.let {
+                    val currentRemoteDir = remoteTemplateDir
+                    if (currentRemoteDir.contains("/")) {
+                        currentRemoteDir.substringBeforeLast("/")
+                    } else {
+                        TEMPLATE_DIR
+                    }
+                } ?: TEMPLATE_DIR
+
+                remoteTemplateDir = "$baseRemoteDir/${config.matcherType}"
+                Log.d(TAG, "由于匹配器类型更改，已更新remoteTemplateDir: $remoteTemplateDir")
+
+                scope.launch(Dispatchers.IO) {
+                    Log.i(TAG, "匹配器类型已更改，正在从新的远程目录同步模板...")
+                    try {
                         syncFromRemote()
+                    } catch (e: Exception) {
+                        Log.w(TAG, "同步模板失败: ${e.message}")
                     }
                 }
             }
-            .launchIn(scope)
-    }
-    
-    /**
-     * 获取根目录（支持优先外部存储）
-     */
-    private fun getRootDir(): File {
-        val config = currentConfig
-        val baseDir = if (config.preferExternalStorage) {
-            val ext = File("/storage/emulated/0", config.rootDir)
-            if (ext.exists() && ext.canWrite()) {
-                ext
-            } else {
-                Log.w(TAG, "外部存储不可用，使用内部存储")
-                File(context.filesDir, config.rootDir)
-            }
-        } else {
-            File(context.filesDir, config.rootDir)
+        } catch (e: Exception) {
+            Log.w(TAG, "updateConfig 处理失败: ${e.message}")
         }
-        if (!baseDir.exists()) baseDir.mkdirs()
-        return baseDir
     }
     
     private val templateDir: File
-        get() = File(getRootDir(), currentConfig.templateDir).apply {
+        get() = File(storageRepository.getRootDir(), currentConfig.templateDir).apply {
             if (!exists()) mkdirs()
         }
     
@@ -125,6 +98,31 @@ class TemplateRepositoryImpl(
             Log.e(TAG, "保存模板失败: $name - ${e.message}", e)
         }
     }
+
+    /**
+     * 将远程文件名转换为本地存储名（外部存储时使用 .tmp_<ext> 规则）
+     */
+    private fun remoteToLocalName(remoteName: String): String {
+        return if (currentConfig.preferExternalStorage) {
+            val idx = remoteName.lastIndexOf('.')
+            if (idx <= 0) return remoteName
+            val base = remoteName.substring(0, idx)
+            val ext = remoteName.substring(idx + 1)
+            "$base.tmp_$ext"
+        } else remoteName
+    }
+
+    /**
+     * 将本地文件名规范化为远程文件名：把 ".tmp_<ext>" 转回 ".<ext>"
+     */
+    private fun normalizeLocalToRemote(localName: String): String {
+        val tmpIndex = localName.lastIndexOf(".tmp_")
+        return if (tmpIndex != -1) {
+            localName.substring(0, tmpIndex) + "." + localName.substring(tmpIndex + 5)
+        } else {
+            localName
+        }
+    }
     
     override suspend fun syncFromRemote(): Result<Int> = withContext(Dispatchers.IO) {
         try {
@@ -136,26 +134,31 @@ class TemplateRepositoryImpl(
             
             Log.d(TAG, "正在从远程同步模板: $remoteTemplateDir")
             
-            // 1. 列出远程模板
-            val remoteFiles = client.listDirectory(remoteTemplateDir)
-            if (remoteFiles.isEmpty()) {
+            // 1. 列出远程模板（包含大小），用于跳过已存在且相同大小的文件
+            val remoteFilesWithSizes = client.listDirectoryWithSizes(remoteTemplateDir)
+            if (remoteFilesWithSizes.isEmpty()) {
                 Log.w(TAG, "未找到远程模板")
                 return@withContext Result.success(0)
             }
-            
-            Log.d(TAG, "发现 ${remoteFiles.size} 个远程模板")
+
+            Log.d(TAG, "发现 ${remoteFilesWithSizes.size} 个远程模板")
             
             // 2. 清理本地模板目录（只保留远程存在的模板）
             try {
                 val localDir = templateDir
                 if (localDir.exists() && localDir.isDirectory) {
+                    // 支持外部存储使用的 ".tmp_<ext>" 命名
                     val localFiles = localDir.listFiles { file ->
-                        file.isFile && (file.name.endsWith(".png", ignoreCase = true) || 
-                                      file.name.endsWith(".jpg", ignoreCase = true))
+                        file.isFile && com.youyou.monitor.infra.matcher.TemplateFileUtil.isLocalImageFile(file)
                     } ?: emptyArray()
-                    
-                    val remoteFileNames = remoteFiles.toSet()
-                    val filesToDelete = localFiles.filter { !remoteFileNames.contains(it.name) }
+
+                    val remoteFileNames = remoteFilesWithSizes.map { it.first }.toSet()
+
+                    // 将本地文件名规范化为远程名称用于比较（将 .tmp_<ext> -> .<ext>）
+                    val filesToDelete = localFiles.filter { local ->
+                        val normalized = com.youyou.monitor.infra.matcher.TemplateFileUtil.normalizeLocalToRemote(local.name)
+                        !remoteFileNames.contains(normalized)
+                    }
                     
                     if (filesToDelete.isNotEmpty()) {
                         Log.d(TAG, "正在清理 ${filesToDelete.size} 个过时的本地模板")
@@ -178,12 +181,20 @@ class TemplateRepositoryImpl(
             
             // 3. 下载并保存模板
             var syncCount = 0
-            for (fileName in remoteFiles) {
+            for ((fileName, remoteSize) in remoteFilesWithSizes) {
                 try {
                     Log.d(TAG, "正在下载模板: $fileName 从 $remoteTemplateDir")
+                    // 如果本地已有同名（按 local 命名规则）且大小匹配，则跳过下载
+                    val localName = remoteToLocalName(fileName)
+                    val localFile = File(templateDir, localName)
+                    if (localFile.exists() && localFile.length() == remoteSize) {
+                        Log.d(TAG, "跳过下载（已存在且大小匹配）: $localName")
+                        continue
+                    }
+
                     val data = client.downloadFile(remoteTemplateDir, fileName)
                     if (data.isNotEmpty()) {
-                        save(fileName, data)
+                        save(localName, data)
                         syncCount++
                     }
                 } catch (e: Exception) {
@@ -191,7 +202,7 @@ class TemplateRepositoryImpl(
                 }
             }
             
-            Log.i(TAG, "模板同步完成: $syncCount/${remoteFiles.size} 已同步")
+            Log.i(TAG, "模板同步完成: $syncCount/${remoteFilesWithSizes.size} 已同步")
             
             // 3. 重新加载模板到matcher
             if (syncCount > 0) {
@@ -228,111 +239,4 @@ class TemplateRepositoryImpl(
         Log.d(TAG, "WebDAV configured: baseRemoteDir=$baseRemoteDir, matcherType=$matcherType, remoteTemplateDir=$remoteTemplateDir")
     }
     
-    /**
-     * 异步迁移模板文件
-     */
-    private fun migrateTemplatesAsync(oldConfig: MonitorConfig, newConfig: MonitorConfig) {
-        if (isMigrating) {
-            Log.w(TAG, "Template migration already in progress, skipping")
-            return
-        }
-        
-        scope.launch(Dispatchers.IO) {
-            try {
-                isMigrating = true
-                migrateTemplates(oldConfig, newConfig)
-            } catch (e: Exception) {
-                Log.e(TAG, "Template migration failed: ${e.message}", e)
-            } finally {
-                isMigrating = false
-            }
-        }
-    }
-    
-    /**
-     * 迁移模板文件
-     */
-    private suspend fun migrateTemplates(oldConfig: MonitorConfig, newConfig: MonitorConfig) = withContext(Dispatchers.IO) {
-        Log.i(TAG, "Starting template migration...")
-        
-        // 计算旧路径
-        val oldBaseDir = if (oldConfig.preferExternalStorage) {
-            val ext = File("/storage/emulated/0", oldConfig.rootDir)
-            if (ext.exists()) ext else File(context.filesDir, oldConfig.rootDir)
-        } else {
-            File(context.filesDir, oldConfig.rootDir)
-        }
-        
-        val oldTemplateDir = File(oldBaseDir, oldConfig.templateDir)
-        val newTemplateDir = templateDir
-        
-        // 检查是否需要迁移
-        if (oldTemplateDir.absolutePath == newTemplateDir.absolutePath) {
-            Log.d(TAG, "Template paths are the same, no migration needed")
-            return@withContext
-        }
-        
-        if (!oldTemplateDir.exists()) {
-            Log.d(TAG, "Old template directory doesn't exist, nothing to migrate")
-            return@withContext
-        }
-        
-        // 确保新目录存在
-        if (!newTemplateDir.exists()) {
-            newTemplateDir.mkdirs()
-        }
-        
-        var movedCount = 0
-        var failedCount = 0
-        
-        // 获取所有模板文件
-        val files = oldTemplateDir.listFiles { file ->
-            file.isFile && (file.name.endsWith(".png") || file.name.endsWith(".jpg"))
-        } ?: emptyArray()
-        
-        Log.d(TAG, "Found ${files.size} templates to migrate")
-        
-        for (file in files) {
-            try {
-                val targetFile = File(newTemplateDir, file.name)
-                
-                // 如果目标已存在且大小相同，删除源文件
-                if (targetFile.exists() && targetFile.length() == file.length()) {
-                    file.delete()
-                    Log.d(TAG, "Deleted duplicate template: ${file.name}")
-                } else if (file.renameTo(targetFile)) {
-                    movedCount++
-                    Log.d(TAG, "Moved template: ${file.name}")
-                } else {
-                    // 尝试复制+删除
-                    file.inputStream().use { input ->
-                        targetFile.outputStream().use { output ->
-                            input.copyTo(output)
-                        }
-                    }
-                    if (file.delete()) {
-                        movedCount++
-                        Log.d(TAG, "Copied and deleted template: ${file.name}")
-                    } else {
-                        failedCount++
-                        Log.w(TAG, "Failed to delete template after copy: ${file.name}")
-                    }
-                }
-            } catch (e: Exception) {
-                failedCount++
-                Log.e(TAG, "Failed to migrate template ${file.name}: ${e.message}")
-            }
-        }
-        
-        Log.i(TAG, "Template migration completed: moved=$movedCount, failed=$failedCount")
-        
-        // 清理旧目录
-        if (failedCount == 0 && oldTemplateDir.listFiles()?.isEmpty() == true) {
-            oldTemplateDir.delete()
-            Log.d(TAG, "Cleaned up old template directory")
-        }
-        
-        // 通知模板更新
-        notifyTemplatesUpdated()
-    }
 }
