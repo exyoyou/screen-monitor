@@ -387,6 +387,10 @@ class ConfigRepositoryImpl(
         try {
             if (_configFlow.value != config) {
                 val json = serializeConfig(config)
+                // 确保父目录存在（首次运行或迁移后可能不存在）
+                configFile.parentFile?.let { parent ->
+                    if (!parent.exists()) parent.mkdirs()
+                }
                 configFile.writeText(json)
                 Log.d(TAG, "本地配置已保存")
                 _configFlow.value = config

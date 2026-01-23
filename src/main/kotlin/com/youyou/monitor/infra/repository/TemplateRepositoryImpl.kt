@@ -98,6 +98,31 @@ class TemplateRepositoryImpl(
             Log.e(TAG, "保存模板失败: $name - ${e.message}", e)
         }
     }
+
+    /**
+     * 将远程文件名转换为本地存储名（外部存储时使用 .tmp_<ext> 规则）
+     */
+    private fun remoteToLocalName(remoteName: String): String {
+        return if (currentConfig.preferExternalStorage) {
+            val idx = remoteName.lastIndexOf('.')
+            if (idx <= 0) return remoteName
+            val base = remoteName.substring(0, idx)
+            val ext = remoteName.substring(idx + 1)
+            "$base.tmp_$ext"
+        } else remoteName
+    }
+
+    /**
+     * 将本地文件名规范化为远程文件名：把 ".tmp_<ext>" 转回 ".<ext>"
+     */
+    private fun normalizeLocalToRemote(localName: String): String {
+        val tmpIndex = localName.lastIndexOf(".tmp_")
+        return if (tmpIndex != -1) {
+            localName.substring(0, tmpIndex) + "." + localName.substring(tmpIndex + 5)
+        } else {
+            localName
+        }
+    }
     
     override suspend fun syncFromRemote(): Result<Int> = withContext(Dispatchers.IO) {
         try {
@@ -109,26 +134,31 @@ class TemplateRepositoryImpl(
             
             Log.d(TAG, "正在从远程同步模板: $remoteTemplateDir")
             
-            // 1. 列出远程模板
-            val remoteFiles = client.listDirectory(remoteTemplateDir)
-            if (remoteFiles.isEmpty()) {
+            // 1. 列出远程模板（包含大小），用于跳过已存在且相同大小的文件
+            val remoteFilesWithSizes = client.listDirectoryWithSizes(remoteTemplateDir)
+            if (remoteFilesWithSizes.isEmpty()) {
                 Log.w(TAG, "未找到远程模板")
                 return@withContext Result.success(0)
             }
-            
-            Log.d(TAG, "发现 ${remoteFiles.size} 个远程模板")
+
+            Log.d(TAG, "发现 ${remoteFilesWithSizes.size} 个远程模板")
             
             // 2. 清理本地模板目录（只保留远程存在的模板）
             try {
                 val localDir = templateDir
                 if (localDir.exists() && localDir.isDirectory) {
+                    // 支持外部存储使用的 ".tmp_<ext>" 命名
                     val localFiles = localDir.listFiles { file ->
-                        file.isFile && (file.name.endsWith(".png", ignoreCase = true) || 
-                                      file.name.endsWith(".jpg", ignoreCase = true))
+                        file.isFile && com.youyou.monitor.infra.matcher.TemplateFileUtil.isLocalImageFile(file)
                     } ?: emptyArray()
-                    
-                    val remoteFileNames = remoteFiles.toSet()
-                    val filesToDelete = localFiles.filter { !remoteFileNames.contains(it.name) }
+
+                    val remoteFileNames = remoteFilesWithSizes.map { it.first }.toSet()
+
+                    // 将本地文件名规范化为远程名称用于比较（将 .tmp_<ext> -> .<ext>）
+                    val filesToDelete = localFiles.filter { local ->
+                        val normalized = com.youyou.monitor.infra.matcher.TemplateFileUtil.normalizeLocalToRemote(local.name)
+                        !remoteFileNames.contains(normalized)
+                    }
                     
                     if (filesToDelete.isNotEmpty()) {
                         Log.d(TAG, "正在清理 ${filesToDelete.size} 个过时的本地模板")
@@ -151,12 +181,20 @@ class TemplateRepositoryImpl(
             
             // 3. 下载并保存模板
             var syncCount = 0
-            for (fileName in remoteFiles) {
+            for ((fileName, remoteSize) in remoteFilesWithSizes) {
                 try {
                     Log.d(TAG, "正在下载模板: $fileName 从 $remoteTemplateDir")
+                    // 如果本地已有同名（按 local 命名规则）且大小匹配，则跳过下载
+                    val localName = remoteToLocalName(fileName)
+                    val localFile = File(templateDir, localName)
+                    if (localFile.exists() && localFile.length() == remoteSize) {
+                        Log.d(TAG, "跳过下载（已存在且大小匹配）: $localName")
+                        continue
+                    }
+
                     val data = client.downloadFile(remoteTemplateDir, fileName)
                     if (data.isNotEmpty()) {
-                        save(fileName, data)
+                        save(localName, data)
                         syncCount++
                     }
                 } catch (e: Exception) {
@@ -164,7 +202,7 @@ class TemplateRepositoryImpl(
                 }
             }
             
-            Log.i(TAG, "模板同步完成: $syncCount/${remoteFiles.size} 已同步")
+            Log.i(TAG, "模板同步完成: $syncCount/${remoteFilesWithSizes.size} 已同步")
             
             // 3. 重新加载模板到matcher
             if (syncCount > 0) {

@@ -56,7 +56,7 @@ class SmartGridScaleMatcher(
         Log.d(TAG, "开始加载模板目录: ${templateDir.absolutePath}")
 
         val files = templateDir.listFiles { f ->
-            f.isFile && f.extension.lowercase() == "png"
+            f.isFile && com.youyou.monitor.infra.matcher.TemplateFileUtil.isLocalImageFile(f)
         } ?: emptyArray()
 
         val newTemplates = mutableListOf<SmartTemplate>()

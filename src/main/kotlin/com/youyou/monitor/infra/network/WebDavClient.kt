@@ -271,17 +271,41 @@ class WebDavClient(
                 val fileName = fullName.substringAfterLast('/')
                 
                 if (fileName.isNotEmpty() && !resource.isDirectory &&
-                    (fileName.endsWith(".png", ignoreCase = true) || 
-                     fileName.endsWith(".jpg", ignoreCase = true) ||
-                     fileName.endsWith(".jpeg", ignoreCase = true))) {
+                    com.youyou.monitor.infra.matcher.TemplateFileUtil.isRemoteImageName(fileName)) {
                     fileName
                 } else null
             }
             
-            Log.d(TAG, "Listed ${fileNames.size} files in $remotePath: $fileNames")
+            Log.d(TAG, "列出 $remotePath 中的 ${fileNames.size} 个文件: $fileNames")
             fileNames
         } catch (e: Exception) {
-            Log.e(TAG, "List directory error: $remotePath - ${e.message}")
+            Log.e(TAG, "列出目录失败: $remotePath - ${e.message}")
+            emptyList()
+        }
+    }
+
+    /**
+     * 列出目录并返回每个文件的远程大小（bytes）
+     */
+    suspend fun listDirectoryWithSizes(remotePath: String): List<Pair<String, Long>> = withContext(Dispatchers.IO) {
+        try {
+            val fullUrl = webdavUrl.trimEnd('/') + "/" + remotePath.trim('/')
+            val resources = sardine.list(fullUrl)
+
+            val entries = resources.mapNotNull { resource ->
+                val fullName = resource.name?.trim('/') ?: ""
+                val fileName = fullName.substringAfterLast('/')
+                if (fileName.isNotEmpty() && !resource.isDirectory &&
+                    com.youyou.monitor.infra.matcher.TemplateFileUtil.isRemoteImageName(fileName)) {
+                    val size = try { resource.contentLength ?: 0L } catch (_: Exception) { 0L }
+                    fileName to size
+                } else null
+            }
+
+            Log.d(TAG, "列出带大小的文件 $remotePath 中的 ${entries.size} 个文件: ${entries.map { it.first }}")
+            entries
+        } catch (e: Exception) {
+            Log.e(TAG, "列出目录（含大小）失败: $remotePath - ${e.message}")
             emptyList()
         }
     }
@@ -295,10 +319,10 @@ class WebDavClient(
             val fullUrl = webdavUrl.trimEnd('/') + fullPath
             
             sardine.delete(fullUrl)
-            Log.d(TAG, "Deleted: $fileName")
+            Log.d(TAG, "已删除远程文件: $fileName")
             true
         } catch (e: Exception) {
-            Log.e(TAG, "Delete error: $fileName - ${e.message}")
+            Log.e(TAG, "删除远程文件失败: $fileName - ${e.message}")
             false
         }
     }
@@ -312,9 +336,9 @@ class WebDavClient(
             // 关闭 OkHttpClient 的连接池和线程池
             okHttpClient.dispatcher.executorService.shutdown()
             okHttpClient.connectionPool.evictAll()
-            Log.d(TAG, "WebDavClient closed, connections released")
+            Log.d(TAG, "WebDavClient已关闭，连接已释放")
         } catch (e: Exception) {
-            Log.w(TAG, "Error closing WebDavClient: ${e.message}")
+            Log.w(TAG, "关闭WebDavClient时出错: ${e.message}")
         }
     }
 }
