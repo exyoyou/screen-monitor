@@ -199,7 +199,7 @@ class MonitorService private constructor(
     // 初始配置重试（指数退避）
     private val configRetryLock = Any()
     private var configRetryAttempt = 0
-    private val CONFIG_RETRY_INITIAL_MS = if (BuildConfig.DEBUG) 0.5 * 60_000L else 1 * 60_000L // DEBUG: 1min, prod: 5min
+    private val CONFIG_RETRY_INITIAL_MS = if (BuildConfig.DEBUG) 30_000L else 1 * 60_000L // DEBUG: 0.5min, prod: 1min
     private val CONFIG_RETRY_MAX_MS = 6 * 60 * 60 * 1000L // 6 hours
 
     // 当前使用的 WebDAV 客户端（需要关闭）
