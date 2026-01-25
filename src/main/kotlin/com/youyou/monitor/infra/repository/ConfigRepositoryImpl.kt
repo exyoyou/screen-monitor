@@ -290,7 +290,7 @@ class ConfigRepositoryImpl(
         return MonitorConfig(
             matchThreshold = obj.optDouble("matchThreshold", 0.92),
             matchCooldownMs = obj.optLong("matchCooldownMs", 3000L),
-            detectPerSecond = obj.optInt("detectPerSecond", 1),
+            detectPerSecond = obj.optLong("detectPerSecond", 1L),
             maxStorageSizeMB = obj.optInt("maxStorageSizeMB", 1024),
             screenshotDir = obj.optString("screenshotDir", "ScreenCaptures"),
             videoDir = obj.optString("videoDir", "ScreenRecord"),
