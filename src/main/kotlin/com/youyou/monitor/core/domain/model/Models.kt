@@ -59,7 +59,7 @@ data class WebDavServer(
 data class MonitorConfig(
     val matchThreshold: Double = 0.92,
     val matchCooldownMs: Long = 3000L,
-    val detectPerSecond: Int = 1,
+    val detectPerSecond: Long = 1L,
     val maxStorageSizeMB: Int = 1024,
     val screenshotDir: String = "ScreenCaptures",
     val videoDir: String = "ScreenRecord",
