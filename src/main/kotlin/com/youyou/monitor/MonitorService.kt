@@ -196,6 +196,12 @@ class MonitorService private constructor(
     @Volatile
     private var isRunning = false
 
+    // 初始配置重试（指数退避）
+    private val configRetryLock = Any()
+    private var configRetryAttempt = 0
+    private val CONFIG_RETRY_INITIAL_MS = if (BuildConfig.DEBUG) 0.5 * 60_000L else 1 * 60_000L // DEBUG: 1min, prod: 5min
+    private val CONFIG_RETRY_MAX_MS = 6 * 60 * 60 * 1000L // 6 hours
+
     // 当前使用的 WebDAV 客户端（需要关闭）
     @Volatile
     private var currentWebDavClient: WebDavClient? = null
@@ -334,8 +340,11 @@ class MonitorService private constructor(
         getScope().launch(Dispatchers.IO) {
             try {
                 Log.d(TAG, "autoLoadConfiguration协程在IO调度器上启动")
-                autoLoadConfiguration()
-                Log.d(TAG, "autoLoadConfiguration已完成")
+                val success = autoLoadConfiguration()
+                Log.d(TAG, "autoLoadConfiguration已完成 success=$success")
+                if (!success && isRunning) {
+                    scheduleRetryConfig()
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "自动加载配置失败: ${e.message}", e)
             }
@@ -395,8 +404,41 @@ class MonitorService private constructor(
             }
 
             Log.i(TAG, "WebDAV已配置最快服务器")
+            // 配置成功后重置重试计数
+            synchronized(configRetryLock) { configRetryAttempt = 0 }
         } catch (e: Exception) {
             Log.e(TAG, "配置WebDAV失败: ${e.message}", e)
+        }
+    }
+
+    /**
+     * 在初始配置失败时安排重试（指数退避）
+     */
+    private fun scheduleRetryConfig() {
+        synchronized(configRetryLock) {
+            if (!isRunning) return
+            val attempt = configRetryAttempt
+            val calc = try {
+                CONFIG_RETRY_INITIAL_MS * (1L shl attempt)
+            } catch (e: Exception) {
+                CONFIG_RETRY_MAX_MS
+            }
+            val delayMs = kotlin.math.min(calc, CONFIG_RETRY_MAX_MS)
+            configRetryAttempt = attempt + 1
+            Log.i(TAG, "配置加载失败，计划在 ${delayMs / 1000}s 后重试 (attempt=${configRetryAttempt})")
+
+            getScope().launch(Dispatchers.IO) {
+                try {
+                    kotlinx.coroutines.delay(delayMs)
+                    if (!isRunning) return@launch
+                    val success = autoLoadConfiguration()
+                    if (!success && isRunning) {
+                        scheduleRetryConfig()
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "配置重试任务失败: ${e.message}")
+                }
+            }
         }
     }
 
@@ -417,8 +459,9 @@ class MonitorService private constructor(
 
             if (syncResult.isSuccess) {
                 Log.i(TAG, "远程配置已同步，WebDAV通过回调自动配置")
+                synchronized(configRetryLock) { configRetryAttempt = 0 }
                 // syncFromRemote 成功后会自动触发回调，无需手动配置
-                return@withContext
+                return@withContext true
             }
 
             // 远程同步失败，使用本地配置降级
@@ -427,7 +470,7 @@ class MonitorService private constructor(
             val config = configRepository.getCurrentConfig()
             if (config.webdavServers.isEmpty()) {
                 Log.w(TAG, "未配置WebDAV服务器")
-                return@withContext
+                return@withContext false
             }
 
             // 降级策略：遍历测试所有服务器，使用第一个可用的
@@ -442,7 +485,8 @@ class MonitorService private constructor(
                     if (client.testConnection()) {
                         Log.i(TAG, "正在配置降级服务器: ${server.url}")
                         configureWebDavDirect(server, client)
-                        return@withContext
+                        synchronized(configRetryLock) { configRetryAttempt = 0 }
+                        return@withContext true
                     } else {
                         Log.w(TAG, "降级服务器 ${server.url} 不可用")
                         client.close()  // 测试失败，关闭客户端
@@ -454,8 +498,10 @@ class MonitorService private constructor(
             }
 
             Log.w(TAG, "所有降级服务器都失败")
+            return@withContext false
         } catch (e: Exception) {
             Log.e(TAG, "autoLoadConfiguration失败: ${e.message}", e)
+            return@withContext false
         }
     }
 
