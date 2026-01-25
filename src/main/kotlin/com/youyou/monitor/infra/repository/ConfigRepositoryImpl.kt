@@ -33,6 +33,7 @@ class ConfigRepositoryImpl(
         const val CONFIG_FILE_NAME = "config.json"
         const val DEBUG_CONFIG_FILE_NAME = "debug_config.json"
         const val DEFAULT_CONFIG_ASSET = "monitor_config_default.json"
+        const val PREF_CONFIG_PATH = "pref_config_file_path"
     }
 
     /**
@@ -47,7 +48,9 @@ class ConfigRepositoryImpl(
         }
     }
 
-    private var configFile = File(context.filesDir, CONFIG_FILE_NAME) // 临时初始化，后续会更新
+    private val prefs by lazy { context.getSharedPreferences("monitor_prefs", Context.MODE_PRIVATE) }
+
+    private var configFile: File = File(context.filesDir, CONFIG_FILE_NAME) // 临时初始化，后续会更新
 
     private val _configFlow = MutableStateFlow(MonitorConfig.default())
 
@@ -62,6 +65,25 @@ class ConfigRepositoryImpl(
         null
 
     init {
+        // 尝试从 SharedPreferences 恢复保存的配置路径
+        try {
+            val saved = prefs.getString(PREF_CONFIG_PATH, null)
+            if (!saved.isNullOrEmpty()) {
+                val f = File(saved)
+                val defaultRoot = _configFlow.value.rootDir
+                // 简单校验：文件存在并且路径包含 rootDir 或指向外部存储
+                if (f.exists() && (f.absolutePath.contains(defaultRoot) || f.absolutePath.startsWith("/storage/emulated/0"))) {
+                    configFile = f
+                    Log.d(TAG, "从 prefs 恢复配置路径: ${configFile.absolutePath}")
+                } else {
+                    prefs.edit().remove(PREF_CONFIG_PATH).apply()
+                    Log.d(TAG, "保存的配置路径无效，已移除")
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "恢复保存的配置路径失败: ${e.message}")
+        }
+
         // 初始化时加载配置（优先级：本地文件 > assets 默认 > 硬编码默认）
         loadLocalConfig()
     }
@@ -383,6 +405,13 @@ class ConfigRepositoryImpl(
             configFile = newConfigFile
         } else {
             Log.d(TAG, "配置文件位置未改变")
+        }
+        // 持久化当前配置文件路径到 SharedPreferences，便于下次恢复
+        try {
+            prefs.edit().putString(PREF_CONFIG_PATH, configFile.absolutePath).apply()
+            Log.d(TAG, "已保存配置文件路径到 ${configFile.absolutePath}")
+        } catch (e: Exception) {
+            Log.w(TAG, "保存配置路径到 prefs 失败: ${e.message}")
         }
         try {
             if (_configFlow.value != config) {
