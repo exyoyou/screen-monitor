@@ -70,6 +70,10 @@ class AdvancedFrameProcessor(
     private val lastLogTime = AtomicLong(0L)
     private val isProcessing = AtomicBoolean(false)
     private var running = true
+
+    // 对外可访问的只读属性（快速检查当前是否正在处理）
+    val isBusy: Boolean
+        get() = isProcessing.get()
     
     // ThreadLocal SimpleDateFormat (线程安全)
     private val timestampFormat = ThreadLocal.withInitial { 
@@ -88,68 +92,93 @@ class AdvancedFrameProcessor(
      * 迁移自 ScreenMonitor.onFrameAvailable()
      */
     suspend fun onFrameAvailable(frame: ImageFrame): Boolean = withContext(Dispatchers.IO) {
+        // 使用新的 tryBeginProcessing 授权接口进行原子检查与占用
+        val started = tryBeginProcessing(frame)
+        if (!started) return@withContext false
+
+        val now = System.currentTimeMillis()
+        val cfg = cachedConfig ?: com.youyou.monitor.core.domain.model.MonitorConfig.default()
+
+        try {
+            processFrameInternal(frame, now, cfg)
+            true
+        } finally {
+            isProcessing.set(false)
+        }
+    }
+
+    /**
+     * 快速非阻塞检查：当前是否可以开始处理（仅作快速判断，非原子操作）。
+     */
+    fun canProcessNow(): Boolean {
+        if (!running) return false
+        if (isProcessing.get()) return false
+        val config = cachedConfig ?: com.youyou.monitor.core.domain.model.MonitorConfig.default()
+        val interval = if (config.detectPerSecond > 0) 1000 / config.detectPerSecond else 500
+        return System.currentTimeMillis() - lastDetectTime.get() >= interval
+    }
+
+    /**
+     * 原子地尝试开始处理一帧：执行队列、频率和签名去重检查，
+     * 通过则占用 `isProcessing` 并更新 `lastDetectTime` 与 `lastFrameSignature`。
+     * 返回 true 表示调用方已获得处理权限，需在完成后释放（框架内会释放）。
+     */
+    suspend fun tryBeginProcessing(frame: ImageFrame): Boolean = withContext(Dispatchers.IO) {
         val count = frameCallCount.incrementAndGet()
-        
+
         // 1. 队列堆积检查（最优先）
         if (isProcessing.get()) {
-            if (count % 50 == 0L) {
+            if (count % 50L == 0L) {
                 Log.d(TAG, "[跳过] 上一帧仍在处理中")
             }
             return@withContext false
         }
-        
+
         val now = System.currentTimeMillis()
-        
+
         // 2. 定期统计日志
         if (now - lastLogTime.get() > LOG_INTERVAL) {
             Log.i(TAG, "[统计] 总调用次数: $count, 运行中: $running, 正在处理: ${isProcessing.get()}")
             lastLogTime.set(now)
         }
-        
+
         // 3. 频率限制
         val config = cachedConfig ?: com.youyou.monitor.core.domain.model.MonitorConfig.default()
         val interval = if (config.detectPerSecond > 0) 1000 / config.detectPerSecond else 500
         if (now - lastDetectTime.get() < interval) {
-            if (count % 100 == 0L) {
+            if (count % 100L == 0L) {
                 Log.d(TAG, "[跳过] 频率限制: ${now - lastDetectTime.get()}ms < ${interval}ms")
             }
             return@withContext false
         }
-        
+
         if (!running) {
             Log.w(TAG, "[跳过] 处理器未运行")
             return@withContext false
         }
-        
-        lastDetectTime.set(now)
-        
+
         // 4. 快速帧签名计算（采样9个点）
         val signature = calculateFrameSignature(frame)
         if (signature == null) {
             Log.e(TAG, "[跳过] 签名计算失败")
             return@withContext false
         }
-        
+
         // 5. 帧去重
         if (signature == lastFrameSignature.get()) {
-            if (count % 50 == 0L) {
+            if (count % 50L == 0L) {
                 Log.d(TAG, "[跳过] 重复帧 (签名: $signature)")
             }
             return@withContext false
         }
-        
-        Log.d(TAG, "[处理] 帧已接受: ${frame.width}x${frame.height}, 签名=$signature")
-        
-        // 6. 更新签名并异步处理
+
+        // 6. 更新签名并占用处理器
+        lastDetectTime.set(now)
         lastFrameSignature.set(signature)
         isProcessing.set(true)
-        
-        try {
-            processFrameInternal(frame, now, config)
-            true
-        } finally {
-            isProcessing.set(false)
-        }
+
+        Log.d(TAG, "[开始] 已获取处理权限: ${frame.width}x${frame.height}, 签名=$signature")
+        true
     }
     
     /**

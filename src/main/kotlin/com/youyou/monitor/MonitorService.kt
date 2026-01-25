@@ -595,6 +595,8 @@ class MonitorService private constructor(
         if (isProcessingFrame) {
             return
         }
+        
+        if (!advancedFrameProcessor.canProcessNow()) return
 
         isProcessingFrame = true
 
