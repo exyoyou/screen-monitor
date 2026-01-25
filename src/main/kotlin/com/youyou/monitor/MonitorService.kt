@@ -373,17 +373,25 @@ class MonitorService private constructor(
 
             // 配置到各个 Repository
             (configRepository as? ConfigRepositoryImpl)?.setWebDavClient(client)
+
+            // 先将 WebDAV client 设置到 TemplateRepository，这样随后下发的 config
+            //（若触发 sync）会使用新的 client，从而避免重复或使用旧 client 的同步。
             (templateRepository as? TemplateRepositoryImpl)?.setWebDavClient(
                 client,
                 server.templateDir
             )
+
             scheduledTaskManager.setWebDavClient(client)
 
-            // 同步模板
-            templateRepository.syncFromRemote().onSuccess {
-                Log.i(TAG, "模板已同步: $it 个模板")
-            }.onFailure {
-                Log.w(TAG, "模板同步失败: ${it.message}")
+            // 下发最新配置到 TemplateRepository（如果 matcherType 变化，TemplateRepository
+            // 会在内部判断并异步触发一次同步）。不要在这里再显式调用 syncFromRemote()
+            // 以避免重复同步。
+            try {
+                val latestConfig = configRepository.getCurrentConfig()
+                templateRepository.updateConfig(latestConfig)
+                Log.d(TAG, "已将最新配置下发给TemplateRepository: matcherType=${latestConfig.matcherType}")
+            } catch (e: Exception) {
+                Log.w(TAG, "下发最新配置给TemplateRepository失败: ${e.message}")
             }
 
             Log.i(TAG, "WebDAV已配置最快服务器")
